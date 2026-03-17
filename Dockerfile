@@ -3,12 +3,15 @@
 
 FROM eclipse-temurin:21-jdk-jammy
 
-# 核心优化1：替换Ubuntu国内阿里云源（解决apt-get下载慢/失败）
+# 核心优化：替换为中科大+网易双源（阿里云源失效替代）
 RUN sed -i.bak \
-    -e 's/archive.ubuntu.com/mirrors.aliyun.com/g' \
-    -e 's/security.ubuntu.com/mirrors.aliyun.com/g' \
+    # 替换Ubuntu官方源为中科大源（优先）
+    -e 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' \
+    -e 's/security.ubuntu.com/mirrors.ustc.edu.cn/g' \
+    # 兜底：若中科大源不可用，替换为网易源
+    -e 's/mirrors.ustc.edu.cn/mirrors.163.com/g' \
     /etc/apt/sources.list && \
-    # 核心优化2：更新源+安装依赖，增加--no-install-recommends减小镜像体积
+    # 更新源（修复缺失包）+ 安装依赖
     apt-get update -y --fix-missing && \
     apt-get install -y --no-install-recommends \
     curl \
