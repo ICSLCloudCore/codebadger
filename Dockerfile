@@ -3,8 +3,14 @@
 
 FROM eclipse-temurin:21-jdk-jammy
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# 核心优化1：替换Ubuntu国内阿里云源（解决apt-get下载慢/失败）
+RUN sed -i.bak \
+    -e 's/archive.ubuntu.com/mirrors.aliyun.com/g' \
+    -e 's/security.ubuntu.com/mirrors.aliyun.com/g' \
+    /etc/apt/sources.list && \
+    # 核心优化2：更新源+安装依赖，增加--no-install-recommends减小镜像体积
+    apt-get update -y --fix-missing && \
+    apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
