@@ -165,6 +165,11 @@ Add the following:
 - `find_double_free`: Detect potential double-free issues.
 - `find_null_pointer_deref`: Find likely null pointer dereferences.
 - `find_integer_overflow`: Detect integer overflow patterns.
+- `find_format_string_vulns`: Detect format string vulnerabilities (CWE-134) where non-literal format arguments are passed to printf-family functions.
+- `find_heap_overflow`: Detect heap overflow vulnerabilities (CWE-122) where writes to heap buffers may exceed their allocated size.
+- `find_stack_overflow`: Detect stack buffer overflow vulnerabilities (CWE-121) where writes to fixed-size local arrays (e.g. `char buf[64]`) may exceed their declared dimension.
+- `find_toctou`: Detect Time-of-Check-Time-of-Use race conditions (CWE-367) where a file is checked with `access()`/`stat()` and then opened or operated on in a separate step.
+- `find_uninitialized_reads`: Detect uninitialized variable reads (CWE-457) where local variables are used before being assigned a value.
 
 ## Contributing & Tests
 

@@ -19,14 +19,29 @@
     * meaning they cannot both execute in the same control flow path.
     */
   def areInMutuallyExclusiveBranches(method: Method, lineA: Int, lineB: Int): Boolean = {
-    method.controlStructure.filter(_.controlStructureType == "IF").l.exists { ifStmt =>
-      val children = ifStmt.astChildren.l
-      if (children.size >= 3) {
-        val thenLines = children(1).ast.lineNumber.l
-        val elseLines = children(2).ast.lineNumber.l
-        (thenLines.contains(lineA) && elseLines.contains(lineB)) ||
-        (elseLines.contains(lineA) && thenLines.contains(lineB))
-      } else false
+    method.ast.isControlStructure.l.exists { cs =>
+      cs.controlStructureType match {
+        case "IF" =>
+          val children = cs.astChildren.l
+          if (children.size >= 3) {
+            val thenLines = children(1).ast.lineNumber.l.toSet
+            val elseLines = children(2).ast.lineNumber.l.toSet
+            (thenLines.contains(lineA) && elseLines.contains(lineB)) ||
+            (elseLines.contains(lineA) && thenLines.contains(lineB))
+          } else false
+        case "SWITCH" =>
+          val switchLines = cs.ast.lineNumber.l.toSet
+          if (switchLines.contains(lineA) && switchLines.contains(lineB)) {
+            val caseLabels = cs.ast.filter(_.label == "JUMP_TARGET").lineNumber.l.sorted
+            if (caseLabels.size >= 2) {
+              def caseSegmentOf(line: Int): Int = caseLabels.lastIndexWhere(_ <= line)
+              val segA = caseSegmentOf(lineA)
+              val segB = caseSegmentOf(lineB)
+              segA >= 0 && segB >= 0 && segA != segB
+            } else false
+          } else false
+        case _ => false
+      }
     }
   }
   
@@ -38,36 +53,45 @@
     "realpath", "popen", "fdopen", "tmpfile", "dlopen"
   )
 
+  // Memoize findEntryPoint results — called once per finding, expensive without cache
+  val entryPointCache = mutable.Map[String, Option[String]]()
+
   /** Check if a method is transitively reachable from external input.
     * BFS-walks callers up to maxDepth levels.
     * Returns Some(entry_function_name) if reachable, None otherwise.
+    * Results are memoized to avoid redundant BFS across multiple findings.
     */
   def findEntryPoint(methodName: String, maxDepth: Int = 10): Option[String] = {
-    var visited = Set[String]()
-    var frontier = List(methodName)
-    var depth = 0
+    entryPointCache.getOrElseUpdate(methodName, {
+      var visited = Set[String]()
+      var frontier = List(methodName)
+      var depth = 0
+      var result: Option[String] = None
 
-    while (depth < maxDepth && frontier.nonEmpty) {
-      val nextFrontier = mutable.ListBuffer[String]()
-      frontier.foreach { current =>
-        if (!visited.contains(current)) {
-          visited += current
-          val hasExtInput = cpg.method.name(current).l.exists { m =>
-            m.call.l.exists(c => externalInputFunctions.contains(c.name))
+      while (depth < maxDepth && frontier.nonEmpty && result.isEmpty) {
+        val nextFrontier = mutable.ListBuffer[String]()
+        frontier.foreach { current =>
+          if (!visited.contains(current) && result.isEmpty) {
+            visited += current
+            val hasExtInput = cpg.method.name(current).l.exists { m =>
+              m.call.l.exists(c => externalInputFunctions.contains(c.name))
+            }
+            if (hasExtInput) result = Some(current)
+            else {
+              val callers = cpg.method.name(current).l
+                .flatMap(_.callIn.l)
+                .map(_.method.name)
+                .distinct
+                .filterNot(visited.contains)
+              nextFrontier ++= callers
+            }
           }
-          if (hasExtInput) return Some(current)
-          val callers = cpg.method.name(current).l
-            .flatMap(_.callIn.l)
-            .map(_.method.name)
-            .distinct
-            .filterNot(visited.contains)
-          nextFrontier ++= callers
         }
+        frontier = nextFrontier.toList
+        depth += 1
       }
-      frontier = nextFrontier.toList
-      depth += 1
-    }
-    None
+      result
+    })
   }
 
   output.append("Use-After-Free Analysis (Deep Interprocedural)\n")
@@ -133,11 +157,21 @@
             if (callLine > freeLine && !call.name.matches("free|cfree|g_free|xmlFree|xsltFree.*")) {
               val reassignedBefore = reassignmentLines.exists(rl => rl > freeLine && rl < callLine)
               
-              // Check for early return between free and usage
-              // Note: return statements are Return nodes in Joern's CPG, not Call nodes
+              // Check for an unconditional early return between free and usage.
+              // A return is only a real guard when it is NOT nested inside a control
+              // structure (loop/if/switch) that starts AFTER the free — because such a
+              // return can be bypassed (e.g. loop body may not execute every iteration).
               val hasEarlyReturn = method.ast.isReturn.l.exists { ret =>
                 val retLine = ret.lineNumber.getOrElse(-1)
-                retLine > freeLine && retLine < callLine
+                retLine > freeLine && retLine < callLine && {
+                  val nestedInControlStructure = method.controlStructure.l.exists { cs =>
+                    val csStart = cs.lineNumber.getOrElse(-1)
+                    val csLines = cs.ast.lineNumber.l.filter(_ > 0)
+                    val csEnd   = if (csLines.nonEmpty) csLines.max else csStart
+                    csStart > freeLine && csStart <= retLine && csEnd >= retLine
+                  }
+                  !nestedInControlStructure
+                }
               }
               
               // Check if free and usage are in mutually exclusive if/else branches
@@ -177,6 +211,58 @@
             }
           }
           
+          // === PHASE 2b: Post-Free Aliasing Detection ===
+          // Catch: free(p); q = p; use(q) — alias created AFTER the free
+          // `aliases` already contains freedPtr + all pre-free aliases, so checking
+          // aliases.contains(srcCode) covers both direct and transitive post-free aliasing.
+          val postFreeAliasAssignments = mutable.ListBuffer[(String, Int)]() // (aliasName, assignLine)
+          method.assignment.l.foreach { assign =>
+            val assignLine = assign.lineNumber.getOrElse(-1)
+            if (assignLine > freeLine) {
+              val srcCode = assign.source.code.trim
+              if (aliases.contains(srcCode)) {
+                val targetCode = assign.target.code.trim
+                if (!targetCode.contains("(") && !targetCode.contains("[") && targetCode.length < 50) {
+                  postFreeAliasAssignments += ((targetCode, assignLine))
+                }
+              }
+            }
+          }
+
+          postFreeAliasAssignments.foreach { case (alias, aliasLine) =>
+            val aliasReassignmentLines = mutable.Set[Int]()
+            method.assignment.l.foreach { assign =>
+              val assignLine = assign.lineNumber.getOrElse(-1)
+              if (assignLine > aliasLine && assign.target.code.trim == alias) {
+                aliasReassignmentLines += assignLine
+              }
+            }
+
+            method.call.l.foreach { call =>
+              val callLine = call.lineNumber.getOrElse(-1)
+              if (callLine > aliasLine && !call.name.matches("free|cfree|g_free|xmlFree|xsltFree.*")) {
+                val aliasReassignedBefore = aliasReassignmentLines.exists(rl => rl > aliasLine && rl < callLine)
+                val hasEarlyReturn = method.ast.isReturn.l.exists { ret =>
+                  val retLine = ret.lineNumber.getOrElse(-1)
+                  retLine > freeLine && retLine < callLine
+                }
+                val inDifferentBranches = areInMutuallyExclusiveBranches(method, freeLine, callLine)
+
+                if (!aliasReassignedBefore && !hasEarlyReturn && !inDifferentBranches) {
+                  val argsContainAlias = call.argument.code.l.exists { argCode =>
+                    argCode == alias ||
+                    argCode.startsWith(alias + "->") ||
+                    argCode.startsWith(alias + "[") ||
+                    argCode.startsWith("*" + alias)
+                  }
+                  if (argsContainAlias) {
+                    postFreeUsages += ((callLine, call.code, freeFile, methodName, s"post-free-alias($alias)"))
+                  }
+                }
+              }
+            }
+          }
+
           if (aliases.size > 1) {
             val aliasesWithoutOriginal = aliases - freedPtr
             aliasesWithoutOriginal.foreach { alias =>
@@ -222,14 +308,27 @@
           val sources = List(freedPtrNode).collect { case cfgNode: CfgNode => cfgNode }
           
           if (sources.nonEmpty) {
-            // Find usages of identifiers with the same name across the codebase
-            // These could be parameters in callees that receive the freed pointer
+            // Find usages of identifiers with the same name — scoped to the freeing
+            // method and its direct callees only.  Scanning the whole codebase for a
+            // common name like "ptr" produces thousands of unrelated nodes and makes
+            // reachableByFlows() extremely slow with many false positives.
+            val directCalleeNames = method.call.l
+              .filterNot(_.name.startsWith("<operator>"))
+              .map(_.name)
+              .distinct
+              .toSet
+
             val sameNameUsages = cpg.identifier.name(freedPtr).l
               .filter { id =>
-                val idLine = id.lineNumber.getOrElse(-1)
-                val idFile = id.file.name.headOption.getOrElse("")
-                // Skip usages in the same method at/before the free
-                !(idFile == freeFile && id.method.name == methodName && idLine <= freeLine)
+                val idLine    = id.lineNumber.getOrElse(-1)
+                val idFile    = id.file.name.headOption.getOrElse("")
+                val idMethod  = id.method.name
+                // Keep: in a direct callee, or in same method AFTER the free
+                val inCallee  = directCalleeNames.contains(idMethod)
+                val postFreeInSameMethod = idFile == freeFile && idMethod == methodName && idLine > freeLine
+                (inCallee || postFreeInSameMethod) &&
+                  // Exclude the free call itself
+                  !(idFile == freeFile && idMethod == methodName && idLine <= freeLine)
               }
               .collect { case cfgNode: CfgNode => cfgNode }
             
@@ -295,7 +394,8 @@
       output.append("No potential Use-After-Free issues detected.\n")
       output.append("\nNote: This analysis includes:\n")
       output.append("  - Intraprocedural usages (same function)\n")
-      output.append("  - Pointer aliasing (p2 = ptr; free(ptr); use(p2))\n")
+      output.append("  - Pre-free aliasing (p2 = ptr; free(ptr); use(p2))\n")
+      output.append("  - Post-free aliasing (free(ptr); p2 = ptr; use(p2))\n")
       output.append("  - Deep interprocedural flow (multi-level call chains)\n")
     } else {
       output.append(s"Found ${uafIssues.size} potential UAF issue(s):\n\n")
@@ -304,7 +404,7 @@
         // Compute confidence based on flow types present
         val hasDirectDeref = usages.exists(u => u._5 == "direct")
         val hasConfirmedInterproc = usages.exists(u => u._5 == "interproc" || u._5 == "deep-interproc")
-        val hasAliasOnly = usages.forall(u => u._5.startsWith("alias"))
+        val hasAliasOnly = usages.forall(u => u._5.startsWith("alias") || u._5.startsWith("post-free-alias"))
         val baseConfidence = if (hasDirectDeref || hasConfirmedInterproc) "HIGH"
                              else if (hasAliasOnly) "MEDIUM"
                              else "MEDIUM"
@@ -327,7 +427,7 @@
             case "direct" => ""
             case "interproc" => " [CROSS-FUNC]"
             case "deep-interproc" => " [DEEP]"
-            case other if other.startsWith("alias") => s" [$other]"
+            case other if other.startsWith("alias") || other.startsWith("post-free-alias") => s" [$other]"
             case _ => ""
           }
           output.append(s"  [$file:$line] $codeSnippet$flowTag\n")
@@ -368,7 +468,8 @@
       output.append(s"Total: ${uafIssues.size} potential UAF issue(s) found\n")
       output.append("\nFlow Types:\n")
       output.append("  - direct: Same-function usage of freed pointer\n")
-      output.append("  - alias(X): Usage of pointer alias X after original freed\n")
+      output.append("  - alias(X): Usage of pre-free alias X (X = ptr before free)\n")
+      output.append("  - post-free-alias(X): Usage of X after X = ptr was assigned post-free\n")
       output.append("  - [CROSS-FUNC]: Usage in directly called function\n")
       output.append("  - [DEEP]: Usage across multiple function call levels\n")
     }

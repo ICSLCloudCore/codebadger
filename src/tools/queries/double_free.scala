@@ -21,14 +21,29 @@
     * meaning they cannot both execute in the same control flow path.
     */
   def areInMutuallyExclusiveBranches(method: Method, lineA: Int, lineB: Int): Boolean = {
-    method.controlStructure.filter(_.controlStructureType == "IF").l.exists { ifStmt =>
-      val children = ifStmt.astChildren.l
-      if (children.size >= 3) {
-        val thenLines = children(1).ast.lineNumber.l
-        val elseLines = children(2).ast.lineNumber.l
-        (thenLines.contains(lineA) && elseLines.contains(lineB)) ||
-        (elseLines.contains(lineA) && thenLines.contains(lineB))
-      } else false
+    method.ast.isControlStructure.l.exists { cs =>
+      cs.controlStructureType match {
+        case "IF" =>
+          val children = cs.astChildren.l
+          if (children.size >= 3) {
+            val thenLines = children(1).ast.lineNumber.l.toSet
+            val elseLines = children(2).ast.lineNumber.l.toSet
+            (thenLines.contains(lineA) && elseLines.contains(lineB)) ||
+            (elseLines.contains(lineA) && thenLines.contains(lineB))
+          } else false
+        case "SWITCH" =>
+          val switchLines = cs.ast.lineNumber.l.toSet
+          if (switchLines.contains(lineA) && switchLines.contains(lineB)) {
+            val caseLabels = cs.ast.filter(_.label == "JUMP_TARGET").lineNumber.l.sorted
+            if (caseLabels.size >= 2) {
+              def caseSegmentOf(line: Int): Int = caseLabels.lastIndexWhere(_ <= line)
+              val segA = caseSegmentOf(lineA)
+              val segB = caseSegmentOf(lineB)
+              segA >= 0 && segB >= 0 && segA != segB
+            } else false
+          } else false
+        case _ => false
+      }
     }
   }
   
@@ -40,35 +55,43 @@
     "realpath", "popen", "fdopen", "tmpfile", "dlopen"
   )
 
+  // Memoize findEntryPoint results — called once per finding, expensive without cache
+  val entryPointCache = mutable.Map[String, Option[String]]()
+
   /** Check if a method is transitively reachable from external input.
-    * BFS-walks callers up to maxDepth levels.
+    * BFS-walks callers up to maxDepth levels. Results are memoized.
     */
   def findEntryPoint(methodName: String, maxDepth: Int = 10): Option[String] = {
-    var visited = Set[String]()
-    var frontier = List(methodName)
-    var depth = 0
+    entryPointCache.getOrElseUpdate(methodName, {
+      var visited = Set[String]()
+      var frontier = List(methodName)
+      var depth = 0
+      var result: Option[String] = None
 
-    while (depth < maxDepth && frontier.nonEmpty) {
-      val nextFrontier = mutable.ListBuffer[String]()
-      frontier.foreach { current =>
-        if (!visited.contains(current)) {
-          visited += current
-          val hasExtInput = cpg.method.name(current).l.exists { m =>
-            m.call.l.exists(c => externalInputFunctions.contains(c.name))
+      while (depth < maxDepth && frontier.nonEmpty && result.isEmpty) {
+        val nextFrontier = mutable.ListBuffer[String]()
+        frontier.foreach { current =>
+          if (!visited.contains(current) && result.isEmpty) {
+            visited += current
+            val hasExtInput = cpg.method.name(current).l.exists { m =>
+              m.call.l.exists(c => externalInputFunctions.contains(c.name))
+            }
+            if (hasExtInput) result = Some(current)
+            else {
+              val callers = cpg.method.name(current).l
+                .flatMap(_.callIn.l)
+                .map(_.method.name)
+                .distinct
+                .filterNot(visited.contains)
+              nextFrontier ++= callers
+            }
           }
-          if (hasExtInput) return Some(current)
-          val callers = cpg.method.name(current).l
-            .flatMap(_.callIn.l)
-            .map(_.method.name)
-            .distinct
-            .filterNot(visited.contains)
-          nextFrontier ++= callers
         }
+        frontier = nextFrontier.toList
+        depth += 1
       }
-      frontier = nextFrontier.toList
-      depth += 1
-    }
-    None
+      result
+    })
   }
 
   output.append("Double-Free Detection Analysis\n")
@@ -167,11 +190,20 @@
                       aliases.contains(assign.target.code.trim)
                     }
                     
-                    // Check if there's a return/goto between the two frees
-                    // Note: return statements are Return nodes in Joern's CPG, not Call nodes
+                    // A return between the two frees is only a real guard when it is NOT
+                    // nested inside a control structure that starts after the first free —
+                    // otherwise the return can be bypassed (e.g. inside a loop body).
                     val hasEarlyExit = method.ast.isReturn.l.exists { ret =>
                       val retLine = ret.lineNumber.getOrElse(-1)
-                      retLine > firstLine && retLine < secondLine
+                      retLine > firstLine && retLine < secondLine && {
+                        val nestedInControlStructure = method.controlStructure.l.exists { cs =>
+                          val csStart = cs.lineNumber.getOrElse(-1)
+                          val csLines = cs.ast.lineNumber.l.filter(_ > 0)
+                          val csEnd   = if (csLines.nonEmpty) csLines.max else csStart
+                          csStart > firstLine && csStart <= retLine && csEnd >= retLine
+                        }
+                        !nestedInControlStructure
+                      }
                     }
                     
                     // Check if the two frees are in mutually exclusive if/else branches

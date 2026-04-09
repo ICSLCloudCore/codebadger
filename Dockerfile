@@ -20,7 +20,7 @@ RUN sed -i.bak \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Joern version
-ENV JOERN_VERSION=4.0.499
+ENV JOERN_VERSION=4.0.516
 ENV JOERN_HOME=/opt/joern
 
 # Download and install Joern from joernio/joern GitHub releases

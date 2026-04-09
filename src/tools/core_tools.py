@@ -4,11 +4,13 @@ Core MCP Tools for CodeBadger Server - Simplified hash-based version
 Provides core CPG management functionality
 """
 
+import asyncio
 import docker
 import hashlib
 import io
 import logging
 import os
+import re
 import shutil
 import tarfile
 from typing import Any, Dict, Optional, Annotated
@@ -178,7 +180,6 @@ async def _restart_server_async(
         if "code_browsing_service" in services:
             logger.info(f"Async: starting cache warm-up for {codebase_hash}")
             try:
-                import asyncio
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, services["code_browsing_service"].warm_up_cache, codebase_hash)
                 logger.info(f"Async: cache warm-up complete for {codebase_hash}")
@@ -239,7 +240,31 @@ async def _generate_cpg_async(
 
         # Use Docker API to generate CPG inside container
         docker_client = docker.from_env()
-        container = docker_client.containers.get("codebadger-joern-server")
+        container_name = "codebadger-joern-server"
+        joern_server_manager = services.get("joern_server_manager")
+        if joern_server_manager:
+            container_name = joern_server_manager.container_name
+        try:
+            container = docker_client.containers.get(container_name)
+        except docker.errors.NotFound:
+            error_msg = (
+                f"Docker container '{container_name}' not found. "
+                f"Please start it with: docker compose up -d"
+            )
+            logger.error(error_msg)
+            codebase_tracker.update_codebase(
+                codebase_hash=codebase_hash,
+                metadata={"status": "failed", "error": error_msg}
+            )
+            return
+        except docker.errors.DockerException as e:
+            error_msg = f"Docker error: {e}"
+            logger.error(error_msg)
+            codebase_tracker.update_codebase(
+                codebase_hash=codebase_hash,
+                metadata={"status": "failed", "error": error_msg}
+            )
+            return
 
         # Get language-specific command
         language_commands = {
@@ -267,7 +292,6 @@ async def _generate_cpg_async(
 
         # Apply exclusion patterns if config is available
         if config and language in config.cpg.languages_with_exclusions and config.cpg.exclusion_patterns:
-            import re
             # Validate and combine exclusion patterns
             escaped_patterns = []
             for pattern in config.cpg.exclusion_patterns:
@@ -311,9 +335,23 @@ async def _generate_cpg_async(
                     logger.info(f"CPG loaded into Joern server on port {joern_port}")
                 else:
                     logger.warning("Failed to load CPG into Joern server")
+                    error_msg = "CPG generated but failed to load into Joern server"
+                    codebase_tracker.update_codebase(
+                        codebase_hash=codebase_hash,
+                        cpg_path=cpg_path,
+                        joern_port=None,
+                        metadata={
+                            "status": "failed",
+                            "error": error_msg,
+                            "container_codebase_path": f"/playground/codebases/{codebase_hash}",
+                            "container_cpg_path": container_cpg_path
+                        }
+                    )
+                    logger.error(f"CPG generation complete but server load failed for {codebase_hash}")
+                    return
             except Exception as e:
                 logger.error(f"Failed to start Joern server: {e}", exc_info=True)
-        
+
         # Update DB with final metadata (preserving container paths)
         codebase_tracker.update_codebase(
             codebase_hash=codebase_hash,
@@ -332,7 +370,6 @@ async def _generate_cpg_async(
         if "code_browsing_service" in services:
             logger.info(f"Starting cache warm-up for {codebase_hash}")
             try:
-                import asyncio
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, services["code_browsing_service"].warm_up_cache, codebase_hash)
                 logger.info(f"Cache warm-up complete for {codebase_hash}")
@@ -387,7 +424,6 @@ Examples:
         source_path="https://github.com/joernio/sample-repo",
         language="java"
     )""",
-        timeout=600,
     )
     async def generate_cpg(
         source_type: Annotated[str, Field(description="Either 'local' or 'github'")],
@@ -462,7 +498,6 @@ Examples:
                         metadata={"status": "loading", **{k: v for k, v in existing_codebase.metadata.items() if k != "status"}}
                     )
 
-                    import asyncio
                     asyncio.create_task(
                         _restart_server_async(
                             codebase_hash=codebase_hash,
@@ -512,7 +547,7 @@ Examples:
                 # Clone to playground/codebases/<hash>
                 if not os.path.exists(codebase_dir):
                     os.makedirs(codebase_dir, exist_ok=True)
-                    git_manager.clone_repository(
+                    await git_manager.clone_repository(
                         repo_url=source_path,
                         target_path=codebase_dir,
                         branch=branch,
@@ -568,7 +603,6 @@ Examples:
             )
 
             # Start async CPG generation task
-            import asyncio
             asyncio.create_task(
                 _generate_cpg_async(
                     codebase_hash=codebase_hash,
@@ -631,7 +665,6 @@ Notes:
 
 Examples:
     get_cpg_status(codebase_hash="abc123456789")""",
-        timeout=30,
     )
     def get_cpg_status(
         codebase_hash: Annotated[str, Field(description="The hash identifier of the codebase")]
@@ -681,7 +714,6 @@ Examples:
                             metadata={"status": "loading", **{k: v for k, v in codebase_info.metadata.items() if k != "status"}}
                         )
 
-                        import asyncio
                         try:
                             loop = asyncio.get_running_loop()
                             loop.create_task(

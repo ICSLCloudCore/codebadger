@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
@@ -124,18 +125,13 @@ class QueryExecutor:
             base_query = query
 
         # Add limit if specified (only for queries that return collections)
-        if limit is not None and limit > 0:
-            # Don't add .take for queries that return a size/int (e.g., cpg.method.size)
-            import re
-            if not re.search(r"\.size\s*$", base_query):
-                base_query = f"{base_query}.take({limit})"
+        is_size_query = bool(re.search(r"\.size\s*$", base_query))
+        if limit is not None and limit > 0 and not is_size_query:
+            base_query = f"{base_query}.take({limit})"
 
         # Add JSON output or string conversion for size results
-        import re
-        if re.search(r"\.size\s*$", base_query):
-            # Size returns Int, convert to string
+        if is_size_query:
             return f"{base_query}.toString"
-        # Default: return JSON output for collections
         return f"{base_query}.toJsonPretty"
 
     def _execute_via_client(self, joern_client: 'JoernServerClient', query: str, timeout: int) -> QueryResult:
@@ -180,7 +176,6 @@ class QueryExecutor:
             return []
 
         # Remove ANSI color codes
-        import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         output = ansi_escape.sub('', output)
 
