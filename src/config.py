@@ -38,6 +38,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
                 host=os.getenv("MCP_HOST", defaults.SERVER_HOST),
                 port=int(os.getenv("MCP_PORT", str(defaults.SERVER_PORT))),
                 log_level=os.getenv("MCP_LOG_LEVEL", defaults.SERVER_LOG_LEVEL),
+                transport_type=os.getenv("MCP_TRANSPORT_TYPE", "http"),
             ),
             joern=JoernConfig(
                 binary_path=os.getenv("JOERN_BINARY_PATH", defaults.JOERN_BINARY_PATH),

@@ -34,22 +34,30 @@ def mock_services():
         source_type="github",
         source_path="https://github.com/test/repo",
         language="c",
-        cpg_path="/tmp/test.cpg"
+        cpg_path="/tmp/test.cpg",
     )
     codebase_tracker.get_codebase.return_value = CodebaseInfo(
         codebase_hash="553642871dd4251d",
         source_type="github",
         source_path="https://github.com/test/repo",
         language="c",
-        cpg_path="/tmp/test.cpg"
+        cpg_path="/tmp/test.cpg",
     )
 
     # Mock query executor
     query_executor = MagicMock()
     query_executor.execute_query.return_value = QueryResult(
         success=True,
-        data=[{"_1": "main", "_2": "function", "_3": "void main()", "_4": "main.c", "_5": 1}],
-        row_count=1
+        data=[
+            {
+                "_1": "main",
+                "_2": "function",
+                "_3": "void main()",
+                "_4": "main.c",
+                "_5": 1,
+            }
+        ],
+        row_count=1,
     )
 
     # Mock config
@@ -59,7 +67,11 @@ def mock_services():
     code_browsing_service = MagicMock()
     code_browsing_service.list_methods.return_value = {"success": True, "methods": []}
     code_browsing_service.list_files.return_value = "test_codebase/"
-    code_browsing_service.run_query.return_value = {"success": True, "data": [], "row_count": 0}
+    code_browsing_service.run_query.return_value = {
+        "success": True,
+        "data": [],
+        "row_count": 0,
+    }
 
     # Mock joern server manager
     joern_server_manager = MagicMock()
@@ -101,14 +113,15 @@ class TestMCPTools:
         """Test successful CPG generation from GitHub"""
         # Import core_tools to register the tools
         from src.tools.core_tools import register_core_tools
-        
-        with patch("src.tools.core_tools.os.path.abspath", return_value=temp_workspace), \
-             patch("src.tools.core_tools.os.path.dirname", return_value=temp_workspace), \
-             patch("src.tools.core_tools.os.path.join", side_effect=os.path.join), \
-             patch("src.tools.core_tools.os.makedirs"), \
-             patch("src.tools.core_tools.shutil.copytree"), \
-             patch("src.tools.core_tools.shutil.copy2"):
 
+        with (
+            patch("src.tools.core_tools.os.path.abspath", return_value=temp_workspace),
+            patch("src.tools.core_tools.os.path.dirname", return_value=temp_workspace),
+            patch("src.tools.core_tools.os.path.join", side_effect=os.path.join),
+            patch("src.tools.core_tools.os.makedirs"),
+            patch("src.tools.core_tools.shutil.copytree"),
+            patch("src.tools.core_tools.shutil.copy2"),
+        ):
             mcp = FastMCP("TestServer")
             register_core_tools(mcp, mock_services)
 
@@ -122,13 +135,14 @@ class TestMCPTools:
                     {
                         "source_type": "github",
                         "source_path": "https://github.com/test/repo",
-                        "language": "c"
-                    }
+                        "language": "c",
+                    },
                 )
 
                 # extract data from CallToolResult
                 data = result.content[0].text
                 import json
+
                 result_dict = json.loads(data)
 
                 # Now it returns "generating" status immediately
@@ -138,9 +152,9 @@ class TestMCPTools:
 
     @pytest.mark.asyncio
     async def test_generate_cpg_cached(self, mock_services, temp_workspace):
-        """Test CPG generation when CPG already exists"""
+        """Test CPG generation when CPG already exists and force_regenerate=False"""
         from src.tools.core_tools import register_core_tools
-        
+
         # Set up existing codebase in tracker
         mock_services["codebase_tracker"].get_codebase.return_value = CodebaseInfo(
             codebase_hash="553642871dd4251d",
@@ -149,36 +163,32 @@ class TestMCPTools:
             language="c",
             cpg_path=os.path.join(temp_workspace, "playground/cpgs/test/cpg.bin"),
             joern_port=2000,
-            metadata={"status": "ready"}
+            metadata={"status": "ready"},
         )
-        
-        with patch("src.tools.core_tools.os.path.abspath", return_value=temp_workspace), \
-             patch("src.tools.core_tools.os.path.dirname", return_value=temp_workspace), \
-             patch("src.tools.core_tools.os.path.join", side_effect=os.path.join), \
-             patch("src.tools.core_tools.os.path.exists", return_value=True):
 
+        with (
+            patch("src.tools.core_tools.os.path.abspath", return_value=temp_workspace),
+            patch("src.tools.core_tools.os.path.dirname", return_value=temp_workspace),
+            patch("src.tools.core_tools.os.path.join", side_effect=os.path.join),
+            patch("src.tools.core_tools.os.path.exists", return_value=True),
+        ):
             mcp = FastMCP("TestServer")
             register_core_tools(mcp, mock_services)
 
-            # Call the tool using Client
+            # Call the tool using Client with force_regenerate=False to test caching behavior
             async with Client(mcp) as client:
                 result = await client.call_tool(
                     "generate_cpg",
                     {
                         "source_type": "github",
                         "source_path": "https://github.com/test/repo",
-                        "language": "c"
-                    }
+                        "language": "c",
+                        "force_regenerate": False,
+                    },
                 )
-                
-                # import json
-                # data = result.content[0].text
-                # result_dict = json.loads(data)
-                # The result object from FastMCP might be different if it handles JSON parsing automatically or wrapped
-                # FastMCP Client.call_tool returns CallToolResult. 
-                # Let's assume we need to parse content.
-                
+
                 import json
+
                 result_dict = json.loads(result.content[0].text)
 
                 assert result_dict["status"] == "ready"
@@ -189,7 +199,7 @@ class TestMCPTools:
     async def test_get_cpg_status_exists(self, mock_services):
         """Test getting CPG status when CPG exists"""
         from src.tools.core_tools import register_core_tools
-        
+
         # Set up existing codebase with metadata
         mock_services["codebase_tracker"].get_codebase.return_value = CodebaseInfo(
             codebase_hash="553642871dd4251d",
@@ -201,39 +211,51 @@ class TestMCPTools:
             metadata={
                 "status": "ready",
                 "container_codebase_path": "/playground/codebases/553642871dd4251d",
-                "container_cpg_path": "/playground/cpgs/553642871dd4251d/cpg.bin"
-            }
+                "container_cpg_path": "/playground/cpgs/553642871dd4251d/cpg.bin",
+            },
         )
-        
+
         mcp = FastMCP("TestServer")
         register_core_tools(mcp, mock_services)
 
         with patch("os.path.exists", return_value=True):
             async with Client(mcp) as client:
-                result = await client.call_tool("get_cpg_status", {"codebase_hash": "553642871dd4251d"})
-                
+                result = await client.call_tool(
+                    "get_cpg_status", {"codebase_hash": "553642871dd4251d"}
+                )
+
                 import json
+
                 result_dict = json.loads(result.content[0].text)
 
                 assert result_dict["codebase_hash"] == "553642871dd4251d"
                 assert result_dict["status"] == "ready"
                 assert "cpg_path" in result_dict
-                assert result_dict["container_codebase_path"] == "/playground/codebases/553642871dd4251d"
-                assert result_dict["container_cpg_path"] == "/playground/cpgs/553642871dd4251d/cpg.bin"
+                assert (
+                    result_dict["container_codebase_path"]
+                    == "/playground/codebases/553642871dd4251d"
+                )
+                assert (
+                    result_dict["container_cpg_path"]
+                    == "/playground/cpgs/553642871dd4251d/cpg.bin"
+                )
 
     @pytest.mark.asyncio
     async def test_get_cpg_status_not_found(self, mock_services):
         """Test getting CPG status when CPG doesn't exist"""
         from src.tools.core_tools import register_core_tools
-        
+
         mock_services["codebase_tracker"].get_codebase.return_value = None
 
         mcp = FastMCP("TestServer")
         register_core_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("get_cpg_status", {"codebase_hash": "nonexistent"})
+            result = await client.call_tool(
+                "get_cpg_status", {"codebase_hash": "nonexistent"}
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["codebase_hash"] == "nonexistent"
@@ -243,13 +265,16 @@ class TestMCPTools:
     async def test_list_methods_success(self, mock_services):
         """Test listing methods successfully"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("list_methods", {"codebase_hash": "553642871dd4251d"})
+            result = await client.call_tool(
+                "list_methods", {"codebase_hash": "553642871dd4251d"}
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is True
@@ -260,12 +285,13 @@ class TestMCPTools:
     async def test_run_cpgql_query_success(self, mock_services):
         """Test running CPGQL query successfully"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         # Patch the query_executor to return a structured QueryResult
         from src.models import QueryResult
+
         mock_services["query_executor"].execute_query.return_value = QueryResult(
             success=True,
             data=["result"],
@@ -273,8 +299,12 @@ class TestMCPTools:
         )
 
         async with Client(mcp) as client:
-            result = await client.call_tool("run_cpgql_query", {"codebase_hash": "553642871dd4251d", "query": "cpg.method"})
+            result = await client.call_tool(
+                "run_cpgql_query",
+                {"codebase_hash": "553642871dd4251d", "query": "cpg.method"},
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is True
@@ -284,11 +314,12 @@ class TestMCPTools:
     async def test_run_cpgql_query_invalid(self, mock_services):
         """Test running invalid CPGQL query"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         from src.models import QueryResult
+
         mock_services["query_executor"].execute_query.return_value = QueryResult(
             success=False,
             error="Invalid query syntax",
@@ -297,8 +328,12 @@ class TestMCPTools:
         )
 
         async with Client(mcp) as client:
-            result = await client.call_tool("run_cpgql_query", {"codebase_hash": "553642871dd4251d", "query": "invalid query"})
+            result = await client.call_tool(
+                "run_cpgql_query",
+                {"codebase_hash": "553642871dd4251d", "query": "invalid query"},
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is False
@@ -308,10 +343,11 @@ class TestMCPTools:
     async def test_get_codebase_summary_success(self, mock_services):
         """Test getting codebase summary successfully"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         # Mock the combined stats query result (single query now)
         # The implementation expects a JSON string or dict with these fields
         import json
+
         summary_data = {
             "success": True,
             "language": "c",
@@ -319,13 +355,13 @@ class TestMCPTools:
             "total_methods": 10,
             "user_defined_methods": 8,
             "total_calls": 15,
-            "total_literals": 20
+            "total_literals": 20,
         }
-        
+
         mock_result = QueryResult(
             success=True,
             data=[json.dumps(summary_data)],  # Return as JSON string like Joern would
-            row_count=1
+            row_count=1,
         )
 
         mock_services["query_executor"].execute_query.return_value = mock_result
@@ -334,8 +370,11 @@ class TestMCPTools:
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("get_codebase_summary", {"codebase_hash": "553642871dd4251d"})
+            result = await client.call_tool(
+                "get_codebase_summary", {"codebase_hash": "553642871dd4251d"}
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is True
@@ -358,7 +397,9 @@ class TestMCPTools:
         subdir = source_dir / "many_files"
         subdir.mkdir()
         for i in range(25):
-            f = subdir / f"file_{i:02d}.txt"  # Use zero-padded names for consistent sorting
+            f = (
+                subdir / f"file_{i:02d}.txt"
+            )  # Use zero-padded names for consistent sorting
             f.write_text(f"content {i}")
 
         # Create nested directories
@@ -379,14 +420,20 @@ class TestMCPTools:
 
         # Use a real CodeBrowsingService instance instead of MagicMock to test file system behavior
         from src.services.code_browsing_service import CodeBrowsingService
-        real_cb_service = CodeBrowsingService(codebase_tracker=mock_services["codebase_tracker"], query_executor=mock_services["query_executor"])
+
+        real_cb_service = CodeBrowsingService(
+            codebase_tracker=mock_services["codebase_tracker"],
+            query_executor=mock_services["query_executor"],
+        )
         mock_services["code_browsing_service"] = real_cb_service
 
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("list_files", {"codebase_hash": "553642871dd4251d"})
+            result = await client.call_tool(
+                "list_files", {"codebase_hash": "553642871dd4251d"}
+            )
             # Result is now a plain text string, not JSON
             tree_text = result.content[0].text
 
@@ -423,7 +470,11 @@ class TestMCPTools:
         )
 
         from src.services.code_browsing_service import CodeBrowsingService
-        real_cb_service = CodeBrowsingService(codebase_tracker=mock_services["codebase_tracker"], query_executor=mock_services["query_executor"])
+
+        real_cb_service = CodeBrowsingService(
+            codebase_tracker=mock_services["codebase_tracker"],
+            query_executor=mock_services["query_executor"],
+        )
         mock_services["code_browsing_service"] = real_cb_service
 
         mcp = FastMCP("TestServer")
@@ -431,7 +482,9 @@ class TestMCPTools:
 
         async with Client(mcp) as client:
             # Test page 1
-            result = await client.call_tool("list_files", {"codebase_hash": "553642871dd4251f"})
+            result = await client.call_tool(
+                "list_files", {"codebase_hash": "553642871dd4251f"}
+            )
             tree_text = result.content[0].text
 
             # Tree should start with the dir name
@@ -447,7 +500,9 @@ class TestMCPTools:
             assert "Use page=2 to see more" in tree_text
 
             # Test page 2
-            result2 = await client.call_tool("list_files", {"codebase_hash": "553642871dd4251f", "page": 2})
+            result2 = await client.call_tool(
+                "list_files", {"codebase_hash": "553642871dd4251f", "page": 2}
+            )
             tree_text2 = result2.content[0].text
 
             # File 100-149 should be present on page 2
@@ -463,7 +518,7 @@ class TestMCPTools:
     async def test_get_cfg_success(self, mock_services):
         """Test getting CFG for a method successfully"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         # Mock query result with CFG as text
         expected_output = """Control Flow Graph for test_func
 ============================================================
@@ -474,25 +529,23 @@ Nodes:
 Edges:
   [1001] -> [1002] [Label: TRUE]
 """
-        
+
         mock_services["query_executor"].execute_query.return_value = QueryResult(
-            success=True,
-            data=[expected_output],
-            row_count=1
+            success=True, data=[expected_output], row_count=1
         )
 
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("get_cfg", {
-                "codebase_hash": "553642871dd4251d",
-                "method_name": "test_func"
-            })
-            
+            result = await client.call_tool(
+                "get_cfg",
+                {"codebase_hash": "553642871dd4251d", "method_name": "test_func"},
+            )
+
             # Result is now a plain text string
             text_result = result.content[0].text
-            
+
             assert "Control Flow Graph for test_func" in text_result
             assert "Nodes:" in text_result
             assert "[1001] ControlStructure: if (x > 0)" in text_result
@@ -503,7 +556,7 @@ Edges:
     async def test_get_type_definition_success(self, mock_services):
         """Test getting type definition with members"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         # Mock query result with type info
         mock_services["query_executor"].execute_query.return_value = QueryResult(
             success=True,
@@ -516,21 +569,22 @@ Edges:
                     "_5": [
                         {"name": "data", "type": "char*"},
                         {"name": "size", "type": "int"},
-                    ]
+                    ],
                 }
             ],
-            row_count=1
+            row_count=1,
         )
 
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("get_type_definition", {
-                "codebase_hash": "553642871dd4251d",
-                "type_name": "Buffer"
-            })
+            result = await client.call_tool(
+                "get_type_definition",
+                {"codebase_hash": "553642871dd4251d", "type_name": "Buffer"},
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is True
@@ -543,7 +597,7 @@ Edges:
     async def test_get_macro_expansion_success(self, mock_services):
         """Test checking for macro expansions"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
-        
+
         # Mock query result with call info including dispatch types
         mock_services["query_executor"].execute_query.return_value = QueryResult(
             success=True,
@@ -553,28 +607,29 @@ Edges:
                     "_2": "MAX(a, b)",
                     "_3": 42,
                     "_4": "utils.c",
-                    "_5": "INLINED"
+                    "_5": "INLINED",
                 },
                 {
                     "_1": "printf",
                     "_2": "printf(msg)",
                     "_3": 43,
                     "_4": "utils.c",
-                    "_5": "STATIC_DISPATCH"
-                }
+                    "_5": "STATIC_DISPATCH",
+                },
             ],
-            row_count=2
+            row_count=2,
         )
 
         mcp = FastMCP("TestServer")
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("get_macro_expansion", {
-                "codebase_hash": "553642871dd4251d",
-                "filename": "utils.c"
-            })
+            result = await client.call_tool(
+                "get_macro_expansion",
+                {"codebase_hash": "553642871dd4251d", "filename": "utils.c"},
+            )
             import json
+
             result_dict = json.loads(result.content[0].text)
 
             assert result_dict["success"] is True
@@ -586,7 +641,9 @@ Edges:
             assert result_dict["calls"][1]["is_macro"] is False
 
     @pytest.mark.asyncio
-    async def test_discover_fixed_vulnerabilities_success(self, mock_services, tmp_path):
+    async def test_discover_fixed_vulnerabilities_success(
+        self, mock_services, tmp_path
+    ):
         """Test discovering vulnerability fixes from git history"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
         from src.models import CodebaseInfo
@@ -598,23 +655,54 @@ Edges:
 
         # Initialize git repo
         subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         # Create files and commit with security-related message
         (repo_dir / "parser.c").write_text("int parse() { return 0; }")
-        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Fix buffer overflow in parser"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Fix buffer overflow in parser"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         # Another security commit
         (repo_dir / "auth.c").write_text("int auth() { return 1; }")
-        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "CVE-2023-1234: Patch SQL injection"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "CVE-2023-1234: Patch SQL injection"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         # Non-security commit
         (repo_dir / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Update documentation"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Update documentation"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         # Configure codebase tracker
         mock_services["codebase_tracker"].get_codebase.return_value = CodebaseInfo(
@@ -629,10 +717,10 @@ Edges:
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("discover_fixed_vulnerabilities", {
-                "codebase_hash": "553642871dd4251d",
-                "limit": 100
-            })
+            result = await client.call_tool(
+                "discover_fixed_vulnerabilities",
+                {"codebase_hash": "553642871dd4251d", "limit": 100},
+            )
             text_result = result.content[0].text
 
             # Should find security-related commits
@@ -645,7 +733,9 @@ Edges:
             assert "parser.c" in text_result or "auth.c" in text_result
 
     @pytest.mark.asyncio
-    async def test_discover_fixed_vulnerabilities_no_matches(self, mock_services, tmp_path):
+    async def test_discover_fixed_vulnerabilities_no_matches(
+        self, mock_services, tmp_path
+    ):
         """Test when no security commits are found"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
         from src.models import CodebaseInfo
@@ -656,12 +746,29 @@ Edges:
         repo_dir.mkdir()
 
         subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         (repo_dir / "main.c").write_text("int main() { return 0; }")
-        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=repo_dir,
+            check=True,
+            capture_output=True,
+        )
 
         mock_services["codebase_tracker"].get_codebase.return_value = CodebaseInfo(
             codebase_hash="553642871dd4251e",
@@ -675,16 +782,20 @@ Edges:
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("discover_fixed_vulnerabilities", {
-                "codebase_hash": "553642871dd4251e"
-            })
+            result = await client.call_tool(
+                "discover_fixed_vulnerabilities", {"codebase_hash": "553642871dd4251e"}
+            )
             text_result = result.content[0].text
 
-            assert "No commits matching vulnerability patterns were found" in text_result
+            assert (
+                "No commits matching vulnerability patterns were found" in text_result
+            )
             assert "CPG-based tools for comprehensive security analysis" in text_result
 
     @pytest.mark.asyncio
-    async def test_discover_fixed_vulnerabilities_no_git_repo(self, mock_services, tmp_path):
+    async def test_discover_fixed_vulnerabilities_no_git_repo(
+        self, mock_services, tmp_path
+    ):
         """Test error handling when source is not a git repository"""
         from src.tools.code_browsing_tools import register_code_browsing_tools
         from src.models import CodebaseInfo
@@ -706,9 +817,9 @@ Edges:
         register_code_browsing_tools(mcp, mock_services)
 
         async with Client(mcp) as client:
-            result = await client.call_tool("discover_fixed_vulnerabilities", {
-                "codebase_hash": "553642871dd4251f"
-            })
+            result = await client.call_tool(
+                "discover_fixed_vulnerabilities", {"codebase_hash": "553642871dd4251f"}
+            )
             text_result = result.content[0].text
 
             assert "Error" in text_result

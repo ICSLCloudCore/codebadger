@@ -44,7 +44,9 @@ def register_prompts(mcp):
 
         lang_clause = ""
         if language:
-            lang_clause = f' Use language="{language}" for all language-specific tool calls.'
+            lang_clause = (
+                f' Use language="{language}" for all language-specific tool calls.'
+            )
 
         focus_instructions = ""
         if focus_area and focus_area != "all":
@@ -85,7 +87,9 @@ If the codebase language is C or C++, also run:
 9. `find_bounds_checks(codebase_hash="{hash}")` — find buffer accesses missing bounds checks
 10. `find_null_pointer_deref(codebase_hash="{hash}")` — detect null pointer dereference vulnerabilities (CWE-476)
 11. `find_integer_overflow(codebase_hash="{hash}")` — detect integer overflow/underflow before allocation or array indexing (CWE-190)
-12. `find_toctou(codebase_hash="{hash}")` — detect TOCTOU race conditions (CWE-367) where access()/stat() is followed by open() on the same path""".format(hash=codebase_hash)
+12. `find_toctou(codebase_hash="{hash}")` — detect TOCTOU race conditions (CWE-367) where access()/stat() is followed by open() on the same path""".format(
+                hash=codebase_hash
+            )
 
         analysis_text = f"""You are performing a comprehensive security audit on codebase `{codebase_hash}`.{lang_clause}
 {f"**Focus**: {focus_instructions}" if focus_instructions else ""}
@@ -100,11 +104,11 @@ Follow this systematic workflow:
 3. Call `discover_fixed_vulnerabilities(codebase_hash="{codebase_hash}")` to find historical vulnerability hints from git history
 
 ## Phase 2: Attack Surface Mapping
-4. Call `find_taint_sources(codebase_hash="{codebase_hash}"{f', language="{language}"' if language else ''})` to enumerate all external input points
-5. Call `find_taint_sinks(codebase_hash="{codebase_hash}"{f', language="{language}"' if language else ''})` to enumerate all dangerous operations
+4. Call `find_taint_sources(codebase_hash="{codebase_hash}"{f', language="{language}"' if language else ""})` to enumerate all external input points
+5. Call `find_taint_sinks(codebase_hash="{codebase_hash}"{f', language="{language}"' if language else ""})` to enumerate all dangerous operations
 
 ## Phase 3: Automated Taint Analysis
-6. Call `find_taint_flows(codebase_hash="{codebase_hash}", mode="auto"{f', language="{language}"' if language else ''})` to discover all confirmed source-to-sink data flows
+6. Call `find_taint_flows(codebase_hash="{codebase_hash}", mode="auto"{f', language="{language}"' if language else ""})` to discover all confirmed source-to-sink data flows
 {memory_instructions}
 
 ## Phase 4: Deep Investigation
@@ -226,7 +230,28 @@ Rate each finding: Critical / High / Medium / Low based on exploitability and im
     ) -> str:
         """Trace tainted data flows between sources and sinks."""
 
-        if source_location and sink_location:
+        # Helper to validate location format and parse it
+        def parse_location(loc):
+            if not loc:
+                return None
+            parts = loc.split(":")
+            if len(parts) < 2:
+                return None
+            try:
+                line = int(parts[1])
+                return {"filename": parts[0], "line": line}
+            except ValueError:
+                return None
+
+        source_info = parse_location(source_location)
+        sink_info = parse_location(sink_location)
+
+        if source_info and sink_info:
+            source_filename = source_info["filename"]
+            source_line = source_info["line"]
+            sink_filename = sink_info["filename"]
+            sink_line = sink_info["line"]
+
             return f"""You are investigating a specific taint flow in codebase `{codebase_hash}`.
 
 **Source**: `{source_location}` (where untrusted data enters)
@@ -237,10 +262,10 @@ Rate each finding: Critical / High / Medium / Low based on exploitability and im
 Follow this workflow:
 
 ## Step 1: Examine Source Context
-Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{source_location.split(':')[0]}", start_line={max(1, int(source_location.split(':')[1]) - 10)}, end_line={int(source_location.split(':')[1]) + 10})` to see the code around the source.
+Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{source_filename}", start_line={max(1, source_line - 10)}, end_line={source_line + 10})` to see the code around the source.
 
 ## Step 2: Examine Sink Context
-Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{sink_location.split(':')[0]}", start_line={max(1, int(sink_location.split(':')[1]) - 10)}, end_line={int(sink_location.split(':')[1]) + 10})` to see the code around the sink.
+Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{sink_filename}", start_line={max(1, sink_line - 10)}, end_line={sink_line + 10})` to see the code around the sink.
 
 ## Step 3: Check for Taint Flow
 Call `find_taint_flows(codebase_hash="{codebase_hash}", source_location="{source_location}", sink_location="{sink_location}")` to confirm whether a data flow path exists.
@@ -263,7 +288,7 @@ Produce a taint flow report:
 - **CWE**: Applicable CWE identifier
 - **Remediation**: Specific fix recommendation with code example"""
         else:
-            lang_param = f', language="{language}"' if language else ''
+            lang_param = f', language="{language}"' if language else ""
             return f"""You are investigating taint flows in codebase `{codebase_hash}`.
 
 No specific source/sink locations were provided, so you will discover and investigate flows automatically.
@@ -310,7 +335,7 @@ For each investigated flow, produce:
     ) -> list[Message]:
         """Map the full attack surface of a codebase."""
 
-        lang_param = f', language="{language}"' if language else ''
+        lang_param = f', language="{language}"' if language else ""
 
         analysis_text = f"""You are mapping the complete attack surface of codebase `{codebase_hash}`.
 
@@ -384,12 +409,22 @@ Top 10 highest-risk areas ranked by: (1) number of reachable sinks, (2) severity
         codebase_hash: str,
         function_name: Optional[str] = None,
         filename: Optional[str] = None,
-        line_number: Optional[int] = None,
+        line_number: Optional[str | int] = None,
     ) -> list[Message]:
+        # Convert line_number to int if it's a string
+        parsed_line_number = None
+        if line_number is not None:
+            if isinstance(line_number, str):
+                try:
+                    parsed_line_number = int(line_number)
+                except ValueError:
+                    parsed_line_number = None
+            else:
+                parsed_line_number = line_number
         """Deep security investigation of a specific function or file area."""
 
         if function_name:
-            file_param = f', filename="{filename}"' if filename else ''
+            file_param = f', filename="{filename}"' if filename else ""
             analysis_text = f"""You are performing a security-focused investigation of function `{function_name}` in codebase `{codebase_hash}`.
 
 {CONFIDENCE_POLICY}
@@ -429,12 +464,12 @@ Produce a report:
         elif filename:
             line_context = ""
             snippet_call = ""
-            if line_number:
-                line_context = f" around line {line_number}"
-                start = max(1, line_number - 25)
-                end = line_number + 25
+            if parsed_line_number:
+                line_context = f" around line {parsed_line_number}"
+                start = max(1, parsed_line_number - 25)
+                end = parsed_line_number + 25
                 snippet_call = f"""
-Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{filename}", start_line={start}, end_line={end})` to see the code around line {line_number}."""
+Call `get_code_snippet(codebase_hash="{codebase_hash}", filename="{filename}", start_line={start}, end_line={end})` to see the code around line {parsed_line_number}."""
             else:
                 snippet_call = f"""
 Call `list_methods(codebase_hash="{codebase_hash}", file_pattern="{filename}")` to enumerate all functions in this file."""
@@ -466,7 +501,7 @@ If the codebase is C/C++:
 - Call `find_integer_overflow(codebase_hash="{codebase_hash}", filename="{filename}")`
 
 ## Step 7: Trace Vulnerabilities
-For each vulnerability found{f" near line {line_number}" if line_number else ""}:
+For each vulnerability found{f" near line {parsed_line_number}" if parsed_line_number else ""}:
 - Call `get_program_slice(codebase_hash="{codebase_hash}", ...)` with direction="backward" to trace data origins
 - Call `get_call_graph(codebase_hash="{codebase_hash}", method_name="<function>", direction="incoming")` to understand who can trigger the vulnerable code
 
@@ -511,7 +546,7 @@ Alternatively, consider using one of these more targeted prompts:
         """Security-focused code review of a codebase, file, or function."""
 
         if function_name:
-            file_param = f', filename="{filename}"' if filename else ''
+            file_param = f', filename="{filename}"' if filename else ""
             scope = f"function `{function_name}`"
             scope_detail = f"Reviewing function `{function_name}`{f' in `{filename}`' if filename else ''}."
         elif filename:
@@ -523,7 +558,7 @@ Alternatively, consider using one of these more targeted prompts:
 
         # Build the step-by-step workflow depending on scope
         if function_name:
-            file_param = f', filename="{filename}"' if filename else ''
+            file_param = f', filename="{filename}"' if filename else ""
             gather_steps = f"""## Step 1: Retrieve Code
 Call `get_file_content(codebase_hash="{codebase_hash}", method_name="{function_name}"{file_param})` to get the full function source.
 Call `list_parameters(codebase_hash="{codebase_hash}", method_name="{function_name}")` to understand the function signature.

@@ -23,13 +23,16 @@ RUN sed -i.bak \
 ENV JOERN_VERSION=4.0.516
 ENV JOERN_HOME=/opt/joern
 
-# Download and install Joern from joernio/joern GitHub releases
+# Copy local Joern installation files
+COPY docker_copy/joern-install.sh /tmp/
+COPY docker_copy/joern-cli.zip /tmp/
+
+# Install Joern using local files with joern-install.sh
 RUN mkdir -p ${JOERN_HOME} && \
     cd /tmp && \
-    wget -q https://github.com/joernio/joern/releases/download/v${JOERN_VERSION}/joern-install.sh && \
     chmod +x joern-install.sh && \
     sed -i 's/sudo //g' joern-install.sh && \
-    ./joern-install.sh && \
+    ./joern-install.sh --version=v${JOERN_VERSION} && \
     rm -rf joern-install.sh joern-cli.zip
 
 # RUN mkdir -p ${JOERN_HOME} && \

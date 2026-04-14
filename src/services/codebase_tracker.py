@@ -55,10 +55,10 @@ class CodebaseTracker:
         """Get codebase information by hash"""
         try:
             data = self.db.get_codebase(codebase_hash)
-            
+
             if not data:
                 return None
-            
+
             return CodebaseInfo.from_dict(data)
 
         except Exception as e:
@@ -72,32 +72,40 @@ class CodebaseTracker:
             existing = self.get_codebase(codebase_hash)
             if not existing:
                 raise ValueError(f"Codebase {codebase_hash} not found")
-            
+
             data = existing.to_dict()
-            
+
             # Handle metadata updates - merge with existing metadata
             if "metadata" in updates and isinstance(updates["metadata"], dict):
                 if existing.metadata:
                     merged_metadata = {**existing.metadata, **updates["metadata"]}
                     updates["metadata"] = merged_metadata
-            
+
             # Update data with new values
             data.update(updates)
-            
+
             # Save back to DB
             self.db.save_codebase(data)
-            
+
             logger.debug(f"Updated codebase {codebase_hash}")
         except Exception as e:
             logger.error(f"Failed to update codebase {codebase_hash}: {e}")
             raise
 
-    def delete_codebase(self, codebase_hash: str) -> None:
-        """Delete codebase information"""
-        # Not implemented in DBManager yet, but we can add it if needed.
-        # For now, we can just log a warning or implement it in DBManager.
-        # Let's implement it in DBManager later if needed.
-        pass
+    def delete_codebase(self, codebase_hash: str) -> bool:
+        """Delete codebase information from the database
+
+        Args:
+            codebase_hash: The codebase hash to delete
+
+        Returns:
+            True if codebase was deleted, False otherwise
+        """
+        try:
+            return self.db.delete_codebase(codebase_hash)
+        except Exception as e:
+            logger.error(f"Failed to delete codebase {codebase_hash}: {e}")
+            return False
 
     def list_codebases(self) -> list[str]:
         """List all tracked codebase hashes"""

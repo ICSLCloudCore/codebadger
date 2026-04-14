@@ -399,15 +399,28 @@ async def root(request):
 
 
 if __name__ == "__main__":
-    # Run the server with HTTP transport (Streamable HTTP)
     # Get configuration
     config_data = load_config("config.yaml")
     host = config_data.server.host
     port = config_data.server.port
+    transport_type = config_data.server.transport_type
     
-    logger.info(f"Starting CodeBadger Server with HTTP transport on {host}:{port}")
+    # Validate transport type
+    valid_transports = ["http", "sse", "stdio"]
+    if transport_type not in valid_transports:
+        logger.warning(f"Invalid transport type '{transport_type}', falling back to 'http'")
+        transport_type = "http"
     
-    # Use HTTP transport (Streamable HTTP) for production deployment
-    # This enables network accessibility, multiple concurrent clients,
-    # and integration with web infrastructure
-    mcp.run(transport="http", host=host, port=port)
+    logger.info(f"Starting CodeBadger Server with {transport_type} transport")
+    
+    if transport_type == "stdio":
+        # Use stdio transport (standard input/output)
+        mcp.run(transport="stdio")
+    elif transport_type == "sse":
+        # Use SSE transport (Server-Sent Events)
+        logger.info(f"SSE transport on {host}:{port}")
+        mcp.run(transport="sse", host=host, port=port)
+    else:
+        # Use HTTP transport (default)
+        logger.info(f"HTTP transport on {host}:{port}")
+        mcp.run(transport="http", host=host, port=port)

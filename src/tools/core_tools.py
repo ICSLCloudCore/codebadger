@@ -11,6 +11,7 @@ import io
 import logging
 import os
 import re
+import shlex
 import shutil
 import tarfile
 from typing import Any, Dict, Optional, Annotated
@@ -35,10 +36,11 @@ def _get_git_commit_hash(path: str) -> Optional[str]:
     """
     try:
         import subprocess
+
         # Check if it is a git repo
         if not os.path.exists(os.path.join(path, ".git")):
-             # It might be a subdirectory of a git repo
-             pass
+            # It might be a subdirectory of a git repo
+            pass
 
         # Run git rev-parse HEAD
         process = subprocess.run(
@@ -46,14 +48,17 @@ def _get_git_commit_hash(path: str) -> Optional[str]:
             cwd=path,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         commit_hash = process.stdout.strip()
         return commit_hash
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return None
 
-def get_cpg_cache_key(source_type: str, source_path: str, language: str, commit_hash: Optional[str] = None) -> str:
+
+def get_cpg_cache_key(
+    source_type: str, source_path: str, language: str, commit_hash: Optional[str] = None
+) -> str:
     """
     Generate a deterministic CPG cache key based on source type, path, language, and optional commit hash.
     """
@@ -101,7 +106,11 @@ def _calculate_repo_size_mb(source_path: str) -> int:
         total_size = 0
         for dirpath, dirnames, filenames in os.walk(source_path):
             # Skip .git directories and other common exclusions for size calculation
-            dirnames[:] = [d for d in dirnames if d not in {'.git', '.svn', '.hg', '.idea', '.vscode', 'node_modules'}]
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in {".git", ".svn", ".hg", ".idea", ".vscode", "node_modules"}
+            ]
 
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
@@ -117,9 +126,11 @@ def _calculate_repo_size_mb(source_path: str) -> int:
         raise
 
 
-def _estimate_processing_time(source_path: str, language: str, has_cpg: bool = False) -> str:
+def _estimate_processing_time(
+    source_path: str, language: str, has_cpg: bool = False
+) -> str:
     """Estimate processing time based on codebase size and whether CPG already exists.
-    
+
     Returns a human-readable time estimate string.
     """
     try:
@@ -159,7 +170,9 @@ async def _restart_server_async(
         codebase_tracker = services["codebase_tracker"]
 
         if not joern_server_manager:
-            logger.error(f"No joern_server_manager available for restart of {codebase_hash}")
+            logger.error(
+                f"No joern_server_manager available for restart of {codebase_hash}"
+            )
             return
 
         logger.info(f"Async: starting Joern server for {codebase_hash}")
@@ -173,7 +186,7 @@ async def _restart_server_async(
         codebase_tracker.update_codebase(
             codebase_hash=codebase_hash,
             joern_port=joern_port,
-            metadata={"status": "ready"}
+            metadata={"status": "ready"},
         )
 
         # Trigger cache warm-up
@@ -181,19 +194,23 @@ async def _restart_server_async(
             logger.info(f"Async: starting cache warm-up for {codebase_hash}")
             try:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, services["code_browsing_service"].warm_up_cache, codebase_hash)
+                await loop.run_in_executor(
+                    None, services["code_browsing_service"].warm_up_cache, codebase_hash
+                )
                 logger.info(f"Async: cache warm-up complete for {codebase_hash}")
             except Exception as e:
                 logger.warning(f"Async: cache warm-up failed for {codebase_hash}: {e}")
 
         logger.info(f"Async: server restart complete for {codebase_hash}")
     except Exception as e:
-        logger.error(f"Async: failed to restart server for {codebase_hash}: {e}", exc_info=True)
+        logger.error(
+            f"Async: failed to restart server for {codebase_hash}: {e}", exc_info=True
+        )
         try:
             codebase_tracker = services["codebase_tracker"]
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": f"Server restart failed: {e}"}
+                metadata={"status": "failed", "error": f"Server restart failed: {e}"},
             )
         except Exception:
             pass
@@ -205,10 +222,11 @@ async def _generate_cpg_async(
     cpg_path: str,
     language: str,
     container_cpg_path: str,
-    services: dict
+    services: dict,
 ):
     """Async task to generate CPG and start Joern server"""
     import logging
+
     logger = logging.getLogger(__name__)
 
     try:
@@ -223,7 +241,9 @@ async def _generate_cpg_async(
         if config:
             repo_size_mb = _calculate_repo_size_mb(codebase_dir)
             max_size_mb = config.cpg.max_repo_size_mb
-            logger.info(f"Repository size: {repo_size_mb}MB, max allowed: {max_size_mb}MB")
+            logger.info(
+                f"Repository size: {repo_size_mb}MB, max allowed: {max_size_mb}MB"
+            )
 
             if repo_size_mb > max_size_mb:
                 error_msg = (
@@ -234,7 +254,7 @@ async def _generate_cpg_async(
                 logger.error(error_msg)
                 codebase_tracker.update_codebase(
                     codebase_hash=codebase_hash,
-                    metadata={"status": "failed", "error": error_msg}
+                    metadata={"status": "failed", "error": error_msg},
                 )
                 return
 
@@ -254,7 +274,7 @@ async def _generate_cpg_async(
             logger.error(error_msg)
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": error_msg}
+                metadata={"status": "failed", "error": error_msg},
             )
             return
         except docker.errors.DockerException as e:
@@ -262,7 +282,7 @@ async def _generate_cpg_async(
             logger.error(error_msg)
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": error_msg}
+                metadata={"status": "failed", "error": error_msg},
             )
             return
 
@@ -288,10 +308,20 @@ async def _generate_cpg_async(
             raise ValueError(f"Unsupported language: {language}")
 
         # Build command
-        cmd = [cmd_binary, f"/playground/codebases/{codebase_hash}", "-o", container_cpg_path]
+        cmd = [
+            cmd_binary,
+            f"/playground/codebases/{codebase_hash}",
+            "-o",
+            container_cpg_path,
+        ]
+        logger.info(cmd)
 
         # Apply exclusion patterns if config is available
-        if config and language in config.cpg.languages_with_exclusions and config.cpg.exclusion_patterns:
+        if (
+            config
+            and language in config.cpg.languages_with_exclusions
+            and config.cpg.exclusion_patterns
+        ):
             # Validate and combine exclusion patterns
             escaped_patterns = []
             for pattern in config.cpg.exclusion_patterns:
@@ -299,29 +329,37 @@ async def _generate_cpg_async(
                     re.compile(pattern)
                     escaped_patterns.append(pattern)
                 except re.error as e:
-                    logger.warning(f"Invalid regex pattern '{pattern}': {e}. Using literal match.")
+                    logger.warning(
+                        f"Invalid regex pattern '{pattern}': {e}. Using literal match."
+                    )
                     escaped_patterns.append(re.escape(pattern))
 
             combined_regex = "|".join(f"({p})" for p in escaped_patterns)
             cmd.extend(["--exclude-regex", combined_regex])
-            logger.info(f"Applied {len(config.cpg.exclusion_patterns)} exclusion patterns")
+            logger.info(
+                f"Applied {len(config.cpg.exclusion_patterns)} exclusion patterns"
+            )
 
-        logger.info(f"Executing CPG generation in container: {' '.join(cmd)}")
-        
+        import shlex
+
+        logger.info(
+            f"Executing CPG generation in container: {' '.join(shlex.quote(arg) for arg in cmd)}"
+        )
+
         # Execute CPG generation
         exec_result = container.exec_run(cmd=cmd, stream=False)
-        
+
         if exec_result.exit_code != 0:
             error_msg = f"CPG generation failed: {exec_result.output.decode('utf-8')}"
             logger.error(error_msg)
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": error_msg}
+                metadata={"status": "failed", "error": error_msg},
             )
             return
-        
+
         logger.info(f"CPG generated successfully: {cpg_path}")
-        
+
         # Step 4: Start Joern server with randomly assigned port (13371-13399)
         joern_port = None
         if joern_server_manager:
@@ -329,7 +367,7 @@ async def _generate_cpg_async(
                 logger.info(f"Spawning Joern server for {codebase_hash}")
                 joern_port = joern_server_manager.spawn_server(codebase_hash)
                 logger.info(f"Joern server started on port {joern_port}")
-                
+
                 # Load CPG into server (use container path, not host path)
                 if joern_server_manager.load_cpg(codebase_hash, container_cpg_path):
                     logger.info(f"CPG loaded into Joern server on port {joern_port}")
@@ -344,10 +382,12 @@ async def _generate_cpg_async(
                             "status": "failed",
                             "error": error_msg,
                             "container_codebase_path": f"/playground/codebases/{codebase_hash}",
-                            "container_cpg_path": container_cpg_path
-                        }
+                            "container_cpg_path": container_cpg_path,
+                        },
                     )
-                    logger.error(f"CPG generation complete but server load failed for {codebase_hash}")
+                    logger.error(
+                        f"CPG generation complete but server load failed for {codebase_hash}"
+                    )
                     return
             except Exception as e:
                 logger.error(f"Failed to start Joern server: {e}", exc_info=True)
@@ -360,10 +400,10 @@ async def _generate_cpg_async(
             metadata={
                 "status": "ready",
                 "container_codebase_path": f"/playground/codebases/{codebase_hash}",
-                "container_cpg_path": container_cpg_path
-            }
+                "container_cpg_path": container_cpg_path,
+            },
         )
-        
+
         logger.info(f"CPG generation complete for {codebase_hash}, port: {joern_port}")
 
         # Trigger cache warm-up
@@ -371,21 +411,27 @@ async def _generate_cpg_async(
             logger.info(f"Starting cache warm-up for {codebase_hash}")
             try:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, services["code_browsing_service"].warm_up_cache, codebase_hash)
+                await loop.run_in_executor(
+                    None, services["code_browsing_service"].warm_up_cache, codebase_hash
+                )
                 logger.info(f"Cache warm-up complete for {codebase_hash}")
             except Exception as e:
                 logger.error(f"Cache warm-up failed for {codebase_hash}: {e}")
-        
+
     except Exception as e:
-        logger.error(f"Error in async CPG generation for {codebase_hash}: {e}", exc_info=True)
+        logger.error(
+            f"Error in async CPG generation for {codebase_hash}: {e}", exc_info=True
+        )
         try:
             codebase_tracker = services["codebase_tracker"]
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": str(e)}
+                metadata={"status": "failed", "error": str(e)},
             )
         except Exception as tracker_error:
-            logger.error(f"Failed to update codebase status in error handler: {tracker_error}")
+            logger.error(
+                f"Failed to update codebase status in error handler: {tracker_error}"
+            )
 
 
 def register_core_tools(mcp, services: dict):
@@ -427,10 +473,36 @@ Examples:
     )
     async def generate_cpg(
         source_type: Annotated[str, Field(description="Either 'local' or 'github'")],
-        source_path: Annotated[str, Field(description="For local: absolute path to source directory. For github: full GitHub URL (e.g., https://github.com/user/repo)")],
-        language: Annotated[str, Field(description="Programming language - one of: java, c, cpp, javascript, python, go, kotlin, csharp, ghidra, jimple, php, ruby, swift")],
-        github_token: Annotated[Optional[str], Field(description="GitHub Personal Access Token for private repositories (optional)")] = None,
-        branch: Annotated[Optional[str], Field(description="Specific git branch to checkout (optional, defaults to default branch)")] = None,
+        source_path: Annotated[
+            str,
+            Field(
+                description="For local: absolute path to source directory. For github: full GitHub URL (e.g., https://github.com/user/repo)"
+            ),
+        ],
+        language: Annotated[
+            str,
+            Field(
+                description="Programming language - one of: java, c, cpp, javascript, python, go, kotlin, csharp, ghidra, jimple, php, ruby, swift"
+            ),
+        ],
+        github_token: Annotated[
+            Optional[str],
+            Field(
+                description="GitHub Personal Access Token for private repositories (optional)"
+            ),
+        ] = None,
+        branch: Annotated[
+            Optional[str],
+            Field(
+                description="Specific git branch to checkout (optional, defaults to default branch)"
+            ),
+        ] = None,
+        force_regenerate: Annotated[
+            Optional[bool],
+            Field(
+                description="Force regenerate CPG by cleaning up existing codebase and CPG before generation (defaults to true)"
+            ),
+        ] = True,
     ) -> Dict[str, Any]:
         """Create a Code Property Graph from source code for analysis."""
         try:
@@ -443,36 +515,116 @@ Examples:
             # Try to get git commit hash for local repos
             commit_hash = None
             if source_type == "local":
-                 try:
-                     RESOLVED_PATH = resolve_host_path(source_path)
-                     commit_hash = _get_git_commit_hash(RESOLVED_PATH)
-                     if commit_hash:
-                         logger.info(f"Detected git commit hash: {commit_hash}")
-                 except Exception as e:
-                     logger.warning(f"Failed to get git commit hash: {e}")
+                try:
+                    RESOLVED_PATH = resolve_host_path(source_path)
+                    commit_hash = _get_git_commit_hash(RESOLVED_PATH)
+                    if commit_hash:
+                        logger.info(f"Detected git commit hash: {commit_hash}")
+                except Exception as e:
+                    logger.warning(f"Failed to get git commit hash: {e}")
 
             # Generate CPG cache key (codebase_hash)
-            codebase_hash = get_cpg_cache_key(source_type, source_path, language, commit_hash)
+            codebase_hash = get_cpg_cache_key(
+                source_type, source_path, language, commit_hash
+            )
             logger.info(f"Processing codebase with hash: {codebase_hash}")
+
+            # Cleanup existing CPG, codebase and Joern server before generation
+            # (enabled by default via force_regenerate=True)
+            if force_regenerate:
+                logger.info(
+                    f"Cleaning up existing codebase and CPG for {codebase_hash} before regeneration"
+                )
+                # Get playground path
+                playground_path = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "playground")
+                )
+                # Remove existing CPG directory
+                cpg_dir = os.path.join(playground_path, "cpgs", codebase_hash)
+                if os.path.exists(cpg_dir):
+                    shutil.rmtree(cpg_dir)
+                    logger.info(f"Removed existing CPG directory: {cpg_dir}")
+                # Remove existing codebase directory
+                codebase_dir = os.path.join(playground_path, "codebases", codebase_hash)
+                if os.path.exists(codebase_dir):
+                    shutil.rmtree(codebase_dir)
+                    logger.info(f"Removed existing codebase directory: {codebase_dir}")
+                # Terminate any existing Joern server
+                joern_server_manager = services.get("joern_server_manager")
+                if joern_server_manager:
+                    try:
+                        joern_server_manager.terminate_server(codebase_hash)
+                        logger.info(
+                            f"Terminated existing Joern server for {codebase_hash}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to terminate existing Joern server: {e}"
+                        )
+                # Delete codebase from database
+                try:
+                    codebase_tracker.delete_codebase(codebase_hash)
+                    logger.info(f"Deleted codebase {codebase_hash} from database")
+                except Exception as e:
+                    logger.warning(f"Failed to delete codebase from database: {e}")
 
             # Check if codebase already exists in DB
             existing_codebase = codebase_tracker.get_codebase(codebase_hash)
-            if existing_codebase and existing_codebase.cpg_path and os.path.exists(existing_codebase.cpg_path):
+
+            # If we have an existing codebase in DB but the CPG file doesn't exist,
+            # we should clean up the DB record and proceed as if it's a new generation
+            if (
+                not force_regenerate
+                and existing_codebase
+                and existing_codebase.cpg_path
+                and not os.path.exists(existing_codebase.cpg_path)
+            ):
+                logger.warning(
+                    f"Existing codebase {codebase_hash} found in DB but CPG file missing, cleaning up DB record"
+                )
+                # Clean up any existing Joern server for this codebase
+                joern_server_manager = services.get("joern_server_manager")
+                if joern_server_manager:
+                    try:
+                        joern_server_manager.terminate_server(codebase_hash)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to terminate server for missing CPG: {e}"
+                        )
+                # Delete the stale DB record
+                try:
+                    codebase_tracker.delete_codebase(codebase_hash)
+                    logger.info(f"Deleted stale DB record for {codebase_hash}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete stale DB record: {e}")
+                # Set existing_codebase to None so we proceed with fresh generation
+                existing_codebase = None
+
+            if (
+                not force_regenerate
+                and existing_codebase
+                and existing_codebase.cpg_path
+                and os.path.exists(existing_codebase.cpg_path)
+            ):
                 logger.info(f"Found existing codebase in DB: {codebase_hash}")
-                
+
                 # Check if Joern server is still running
                 joern_server_manager = services.get("joern_server_manager")
                 joern_port = existing_codebase.joern_port
                 server_running = False
-                
+
                 if joern_server_manager:
-                    if joern_port and joern_server_manager.is_server_running(codebase_hash):
+                    if joern_port and joern_server_manager.is_server_running(
+                        codebase_hash
+                    ):
                         server_running = True
                     else:
                         if joern_port:
-                            logger.info(f"Joern server recorded on port {joern_port} but not running for {codebase_hash}")
+                            logger.info(
+                                f"Joern server recorded on port {joern_port} but not running for {codebase_hash}"
+                            )
                         joern_port = None
-                
+
                 if server_running:
                     # Server is already running, return ready immediately
                     return {
@@ -487,7 +639,9 @@ Examples:
                     }
                 else:
                     # Server not running — kick off async restart and return immediately
-                    container_cpg_path = existing_codebase.metadata.get("container_cpg_path")
+                    container_cpg_path = existing_codebase.metadata.get(
+                        "container_cpg_path"
+                    )
                     if not container_cpg_path:
                         container_cpg_path = f"/playground/cpgs/{codebase_hash}/cpg.bin"
 
@@ -495,7 +649,14 @@ Examples:
                     codebase_tracker.update_codebase(
                         codebase_hash=codebase_hash,
                         joern_port=None,
-                        metadata={"status": "loading", **{k: v for k, v in existing_codebase.metadata.items() if k != "status"}}
+                        metadata={
+                            "status": "loading",
+                            **{
+                                k: v
+                                for k, v in existing_codebase.metadata.items()
+                                if k != "status"
+                            },
+                        },
                     )
 
                     asyncio.create_task(
@@ -508,10 +669,17 @@ Examples:
 
                     # Estimate time
                     codebase_dir = os.path.join(
-                        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "playground")),
-                        "codebases", codebase_hash
+                        os.path.abspath(
+                            os.path.join(
+                                os.path.dirname(__file__), "..", "..", "playground"
+                            )
+                        ),
+                        "codebases",
+                        codebase_hash,
                     )
-                    estimate = _estimate_processing_time(codebase_dir, existing_codebase.language, has_cpg=True)
+                    estimate = _estimate_processing_time(
+                        codebase_dir, existing_codebase.language, has_cpg=True
+                    )
 
                     return {
                         "codebase_hash": codebase_hash,
@@ -526,7 +694,7 @@ Examples:
 
             # Get services
             git_manager = services["git_manager"]
-            
+
             # Get playground path (absolute)
             playground_path = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "..", "..", "playground")
@@ -535,15 +703,15 @@ Examples:
             # Step 1 & 2: Prepare source code - copy local path or clone repo
             codebase_dir = os.path.join(playground_path, "codebases", codebase_hash)
             container_codebase_path = f"/playground/codebases/{codebase_hash}"
-            
+
             logger.info(f"Preparing source code for {codebase_hash}")
-            
+
             # Store repository URL if git
             repository_url = source_path if source_type == "github" else None
-            
+
             if source_type == "github":
                 validate_github_url(source_path)
-                
+
                 # Clone to playground/codebases/<hash>
                 if not os.path.exists(codebase_dir):
                     os.makedirs(codebase_dir, exist_ok=True)
@@ -559,16 +727,16 @@ Examples:
             else:
                 # Local path - copy to playground/codebases/<hash>
                 host_path = resolve_host_path(source_path)
-                
+
                 if not os.path.exists(codebase_dir):
                     os.makedirs(codebase_dir, exist_ok=True)
                     logger.info(f"Copying source from {host_path} to {codebase_dir}")
-                    
+
                     try:
                         for item in os.listdir(host_path):
                             src_item = os.path.join(host_path, item)
                             dst_item = os.path.join(codebase_dir, item)
-                            
+
                             if os.path.isdir(src_item):
                                 shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
                             else:
@@ -598,8 +766,8 @@ Examples:
                     "container_codebase_path": container_codebase_path,
                     "container_cpg_path": container_cpg_path,
                     "repository": repository_url,
-                    "status": "generating"
-                }
+                    "status": "generating",
+                },
             )
 
             # Start async CPG generation task
@@ -610,7 +778,7 @@ Examples:
                     cpg_path=cpg_path,
                     language=language,
                     container_cpg_path=container_cpg_path,
-                    services=services
+                    services=services,
                 )
             )
 
@@ -631,13 +799,17 @@ Examples:
         except ValidationError as e:
             logger.error(f"Validation error: {e}")
             return {
-                "success": False,
+                "codebase_hash": codebase_hash if "codebase_hash" in locals() else "",
+                "status": "failed",
+                "message": str(e),
                 "error": str(e),
             }
         except Exception as e:
             logger.error(f"Failed to generate CPG: {e}", exc_info=True)
             return {
-                "success": False,
+                "codebase_hash": codebase_hash if "codebase_hash" in locals() else "",
+                "status": "failed",
+                "message": str(e),
                 "error": str(e),
             }
 
@@ -667,27 +839,33 @@ Examples:
     get_cpg_status(codebase_hash="abc123456789")""",
     )
     def get_cpg_status(
-        codebase_hash: Annotated[str, Field(description="The hash identifier of the codebase")]
+        codebase_hash: Annotated[
+            str, Field(description="The hash identifier of the codebase")
+        ],
     ) -> Dict[str, Any]:
         """Check CPG generation status or verify if a CPG exists and is ready."""
         try:
             codebase_tracker = services["codebase_tracker"]
-            
+
             # Step 6: If codebase exists in DB, return metadata
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
-            
+
             if not codebase_info:
                 return {
                     "codebase_hash": codebase_hash,
                     "status": "not_found",
                     "message": "Codebase not found. Please generate CPG first.",
                 }
-            
+
             # Get status from metadata
             status = codebase_info.metadata.get("status", "unknown")
-            if status == "unknown" and codebase_info.cpg_path and os.path.exists(codebase_info.cpg_path):
+            if (
+                status == "unknown"
+                and codebase_info.cpg_path
+                and os.path.exists(codebase_info.cpg_path)
+            ):
                 status = "ready"
-            
+
             # Ensure Joern server is running if status is ready
             joern_port = codebase_info.joern_port
             if status == "ready":
@@ -696,22 +874,37 @@ Examples:
                     # Check if running
                     is_running = False
                     if joern_port:
-                        is_running = joern_server_manager.is_server_running(codebase_hash)
-                    
+                        is_running = joern_server_manager.is_server_running(
+                            codebase_hash
+                        )
+
                     if not is_running:
-                        logger.info(f"Joern server not running for ready codebase {codebase_hash}, restarting in background...")
+                        logger.info(
+                            f"Joern server not running for ready codebase {codebase_hash}, restarting in background..."
+                        )
                         joern_port = None
                         status = "loading"
 
                         # Kick off async restart
-                        container_cpg_path = codebase_info.metadata.get("container_cpg_path")
+                        container_cpg_path = codebase_info.metadata.get(
+                            "container_cpg_path"
+                        )
                         if not container_cpg_path:
-                            container_cpg_path = f"/playground/cpgs/{codebase_hash}/cpg.bin"
+                            container_cpg_path = (
+                                f"/playground/cpgs/{codebase_hash}/cpg.bin"
+                            )
 
                         codebase_tracker.update_codebase(
                             codebase_hash=codebase_hash,
                             joern_port=None,
-                            metadata={"status": "loading", **{k: v for k, v in codebase_info.metadata.items() if k != "status"}}
+                            metadata={
+                                "status": "loading",
+                                **{
+                                    k: v
+                                    for k, v in codebase_info.metadata.items()
+                                    if k != "status"
+                                },
+                            },
                         )
 
                         try:
@@ -724,8 +917,10 @@ Examples:
                                 )
                             )
                         except RuntimeError:
-                            logger.warning(f"No event loop for async restart of {codebase_hash}")
-            
+                            logger.warning(
+                                f"No event loop for async restart of {codebase_hash}"
+                            )
+
             return {
                 "codebase_hash": codebase_hash,
                 "status": status,
@@ -734,7 +929,9 @@ Examples:
                 "source_type": codebase_info.source_type,
                 "source_path": codebase_info.source_path,
                 "language": codebase_info.language,
-                "container_codebase_path": codebase_info.metadata.get("container_codebase_path"),
+                "container_codebase_path": codebase_info.metadata.get(
+                    "container_codebase_path"
+                ),
                 "container_cpg_path": codebase_info.metadata.get("container_cpg_path"),
                 "repository": codebase_info.metadata.get("repository"),
                 "created_at": codebase_info.created_at.isoformat(),
@@ -744,6 +941,8 @@ Examples:
         except Exception as e:
             logger.error(f"Failed to get CPG status: {e}", exc_info=True)
             return {
-                "success": False,
+                "codebase_hash": codebase_hash,
+                "status": "failed",
+                "message": str(e),
                 "error": str(e),
             }

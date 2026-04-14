@@ -138,3 +138,4 @@ playground/codebases/*
 joern-docs.md
 test_scripts/
 codebadger.db
+docker_copy/joern-cli.zip

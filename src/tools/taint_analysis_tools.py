@@ -473,6 +473,9 @@ Examples:
                 else:
                     query = f'cpg.call.name("{joined}").map(c => (c.id, c.name, c.code, c.file.name.headOption.getOrElse("unknown"), c.lineNumber.getOrElse(-1), c.method.fullName)).take({limit})'
 
+                # debug
+                logger.info(query)
+
                 result = query_executor.execute_query(
                     codebase_hash=codebase_hash,
                     cpg_path=codebase_info.cpg_path,
@@ -480,6 +483,9 @@ Examples:
                     timeout=30,
                     limit=limit,
                 )
+
+                # debug
+                logger.info(result)
 
                 if not result.success:
                     return {"success": False, "error": result.error}

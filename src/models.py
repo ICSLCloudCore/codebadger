@@ -130,6 +130,7 @@ class ServerConfig:
     host: str = "0.0.0.0"
     port: int = 4242
     log_level: str = "INFO"
+    transport_type: str = "http"  # "http", "sse", or "stdio"
 
 
 @dataclass

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
+
 class DBManager:
     """SQLite database manager for CodeBadger"""
 
@@ -78,10 +79,18 @@ class DBManager:
                 """)
 
                 # Create indexes for efficient querying
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_codebase ON findings(codebase_hash)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_confidence ON findings(confidence)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_type ON findings(finding_type)")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_findings_codebase ON findings(codebase_hash)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_findings_confidence ON findings(confidence)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_findings_type ON findings(finding_type)"
+                )
 
                 conn.commit()
         except Exception as e:
@@ -94,36 +103,41 @@ class DBManager:
         try:
             with self._get_connection() as conn:
                 now = datetime.now(timezone.utc).isoformat()
-                
+
                 # Ensure metadata is JSON string
                 if isinstance(data.get("metadata"), dict):
                     data["metadata"] = json.dumps(data["metadata"])
-                
+
                 # Check if exists to preserve created_at
-                cursor = conn.execute("SELECT created_at FROM codebases WHERE hash = ?", (data["hash"],))
+                cursor = conn.execute(
+                    "SELECT created_at FROM codebases WHERE hash = ?", (data["hash"],)
+                )
                 existing = cursor.fetchone()
-                
+
                 if existing:
                     created_at = existing["created_at"]
                 else:
                     created_at = now
 
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT OR REPLACE INTO codebases (
                         hash, source_type, source_path, language, 
                         cpg_path, joern_port, metadata, created_at, last_accessed
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data["hash"],
-                    data.get("source_type"),
-                    data.get("source_path"),
-                    data.get("language"),
-                    data.get("cpg_path"),
-                    data.get("joern_port"),
-                    data.get("metadata", "{}"),
-                    created_at,
-                    now
-                ))
+                """,
+                    (
+                        data["hash"],
+                        data.get("source_type"),
+                        data.get("source_path"),
+                        data.get("language"),
+                        data.get("cpg_path"),
+                        data.get("joern_port"),
+                        data.get("metadata", "{}"),
+                        created_at,
+                        now,
+                    ),
+                )
                 conn.commit()
         except Exception as e:
             logger.error(f"Failed to save codebase: {e}")
@@ -133,15 +147,20 @@ class DBManager:
         """Get codebase information by hash"""
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute("SELECT * FROM codebases WHERE hash = ?", (codebase_hash,))
+                cursor = conn.execute(
+                    "SELECT * FROM codebases WHERE hash = ?", (codebase_hash,)
+                )
                 row = cursor.fetchone()
-                
+
                 if row:
                     # Update last_accessed
                     now = datetime.now(timezone.utc).isoformat()
-                    conn.execute("UPDATE codebases SET last_accessed = ? WHERE hash = ?", (now, codebase_hash))
+                    conn.execute(
+                        "UPDATE codebases SET last_accessed = ? WHERE hash = ?",
+                        (now, codebase_hash),
+                    )
                     conn.commit()
-                    
+
                     data = dict(row)
                     if data["metadata"]:
                         data["metadata"] = json.loads(data["metadata"])
@@ -150,6 +169,34 @@ class DBManager:
         except Exception as e:
             logger.error(f"Failed to get codebase: {e}")
             return None
+
+    def delete_codebase(self, codebase_hash: str) -> bool:
+        """Delete a codebase entry from the database
+
+        Args:
+            codebase_hash: The codebase hash to delete
+
+        Returns:
+            True if codebase was deleted, False otherwise
+        """
+        try:
+            with self._get_connection() as conn:
+                # First delete associated findings
+                conn.execute(
+                    "DELETE FROM findings WHERE codebase_hash = ?", (codebase_hash,)
+                )
+                # Then delete the codebase entry
+                cursor = conn.execute(
+                    "DELETE FROM codebases WHERE hash = ?", (codebase_hash,)
+                )
+                conn.commit()
+                if cursor.rowcount > 0:
+                    logger.info(f"Deleted codebase {codebase_hash} from database")
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to delete codebase {codebase_hash}: {e}")
+            return False
 
     def list_codebases(self) -> List[str]:
         """List all tracked codebase hashes"""
@@ -162,59 +209,77 @@ class DBManager:
             return []
 
     # Tool cache operations
-    def cache_tool_output(self, tool_name: str, codebase_hash: str, parameters: Dict[str, Any], output: Any):
+    def cache_tool_output(
+        self,
+        tool_name: str,
+        codebase_hash: str,
+        parameters: Dict[str, Any],
+        output: Any,
+    ):
         """Cache tool output"""
         try:
             import hashlib
-            
+
             # Create a stable hash of parameters
             param_str = json.dumps(parameters, sort_keys=True)
             param_hash = hashlib.sha256(param_str.encode()).hexdigest()
-            
+
             with self._get_connection() as conn:
                 now = datetime.now(timezone.utc).isoformat()
-                
-                conn.execute("""
+
+                conn.execute(
+                    """
                     INSERT OR REPLACE INTO tool_cache (
                         tool_name, codebase_hash, parameters_hash, parameters, output, created_at
                     ) VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    tool_name,
-                    codebase_hash,
-                    param_hash,
-                    param_str,
-                    json.dumps(output),
-                    now
-                ))
+                """,
+                    (
+                        tool_name,
+                        codebase_hash,
+                        param_hash,
+                        param_str,
+                        json.dumps(output),
+                        now,
+                    ),
+                )
                 conn.commit()
         except Exception as e:
             logger.error(f"Failed to cache tool output: {e}")
             # Don't raise, just log error as caching is optional
 
-    def get_cached_tool_output(self, tool_name: str, codebase_hash: str, parameters: Dict[str, Any], cache_ttl: int = 300) -> Optional[Any]:
+    def get_cached_tool_output(
+        self,
+        tool_name: str,
+        codebase_hash: str,
+        parameters: Dict[str, Any],
+        cache_ttl: int = 300,
+    ) -> Optional[Any]:
         """Get cached tool output if not expired.
-        
+
         Args:
             tool_name: Name of the tool
             codebase_hash: Hash of the codebase
             parameters: Tool parameters
             cache_ttl: Time-to-live in seconds (default: 300)
-        
+
         Returns:
             Cached output if found and not expired, None otherwise
         """
         try:
             import hashlib
-            
+
             param_str = json.dumps(parameters, sort_keys=True)
             param_hash = hashlib.sha256(param_str.encode()).hexdigest()
-            
+
             with self._get_connection() as conn:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT output, created_at FROM tool_cache 
                     WHERE tool_name = ? AND codebase_hash = ? AND parameters_hash = ?
-                """, (tool_name, codebase_hash, param_hash))
-                
+                """,
+                    (tool_name, codebase_hash, param_hash),
+                )
+
                 row = cursor.fetchone()
                 if row:
                     # Check if entry is expired
@@ -225,7 +290,9 @@ class DBManager:
                     now = datetime.now(timezone.utc)
                     age_seconds = (now - created_at).total_seconds()
                     if age_seconds > cache_ttl:
-                        logger.debug(f"Cache entry expired for {tool_name} (age: {age_seconds:.0f}s, ttl: {cache_ttl}s)")
+                        logger.debug(
+                            f"Cache entry expired for {tool_name} (age: {age_seconds:.0f}s, ttl: {cache_ttl}s)"
+                        )
                         return None
                     return json.loads(row["output"])
                 return None
@@ -235,20 +302,23 @@ class DBManager:
 
     def cleanup_expired_cache(self, max_age_seconds: int = 3600) -> int:
         """Remove cache entries older than max_age_seconds.
-        
+
         Args:
             max_age_seconds: Maximum age of cache entries to keep (default: 3600)
-        
+
         Returns:
             Number of deleted entries
         """
         try:
             with self._get_connection() as conn:
                 cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     DELETE FROM tool_cache 
                     WHERE created_at < ?
-                """, (cutoff.isoformat(),))
+                """,
+                    (cutoff.isoformat(),),
+                )
                 conn.commit()
                 deleted = cursor.rowcount
                 if deleted > 0:
@@ -293,27 +363,30 @@ class DBManager:
                 if isinstance(finding_data.get("flow_data"), dict):
                     finding_data["flow_data"] = json.dumps(finding_data["flow_data"])
 
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     INSERT INTO findings (
                         codebase_hash, finding_type, severity, confidence,
                         filename, line_number, message, description,
                         cwe_id, rule_id, flow_data, metadata, created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    finding_data.get("codebase_hash"),
-                    finding_data.get("finding_type"),
-                    finding_data.get("severity"),
-                    finding_data.get("confidence"),
-                    finding_data.get("filename"),
-                    finding_data.get("line_number"),
-                    finding_data.get("message"),
-                    finding_data.get("description"),
-                    finding_data.get("cwe_id"),
-                    finding_data.get("rule_id"),
-                    finding_data.get("flow_data"),
-                    finding_data.get("metadata"),
-                    now
-                ))
+                """,
+                    (
+                        finding_data.get("codebase_hash"),
+                        finding_data.get("finding_type"),
+                        finding_data.get("severity"),
+                        finding_data.get("confidence"),
+                        finding_data.get("filename"),
+                        finding_data.get("line_number"),
+                        finding_data.get("message"),
+                        finding_data.get("description"),
+                        finding_data.get("cwe_id"),
+                        finding_data.get("rule_id"),
+                        finding_data.get("flow_data"),
+                        finding_data.get("metadata"),
+                        now,
+                    ),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except Exception as e:
@@ -339,29 +412,34 @@ class DBManager:
                     if isinstance(finding_data.get("metadata"), dict):
                         finding_data["metadata"] = json.dumps(finding_data["metadata"])
                     if isinstance(finding_data.get("flow_data"), dict):
-                        finding_data["flow_data"] = json.dumps(finding_data["flow_data"])
+                        finding_data["flow_data"] = json.dumps(
+                            finding_data["flow_data"]
+                        )
 
-                    conn.execute("""
+                    conn.execute(
+                        """
                         INSERT INTO findings (
                             codebase_hash, finding_type, severity, confidence,
                             filename, line_number, message, description,
                             cwe_id, rule_id, flow_data, metadata, created_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        finding_data.get("codebase_hash"),
-                        finding_data.get("finding_type"),
-                        finding_data.get("severity"),
-                        finding_data.get("confidence"),
-                        finding_data.get("filename"),
-                        finding_data.get("line_number"),
-                        finding_data.get("message"),
-                        finding_data.get("description"),
-                        finding_data.get("cwe_id"),
-                        finding_data.get("rule_id"),
-                        finding_data.get("flow_data"),
-                        finding_data.get("metadata"),
-                        now
-                    ))
+                    """,
+                        (
+                            finding_data.get("codebase_hash"),
+                            finding_data.get("finding_type"),
+                            finding_data.get("severity"),
+                            finding_data.get("confidence"),
+                            finding_data.get("filename"),
+                            finding_data.get("line_number"),
+                            finding_data.get("message"),
+                            finding_data.get("description"),
+                            finding_data.get("cwe_id"),
+                            finding_data.get("rule_id"),
+                            finding_data.get("flow_data"),
+                            finding_data.get("metadata"),
+                            now,
+                        ),
+                    )
                     count += 1
 
                 conn.commit()
@@ -370,8 +448,13 @@ class DBManager:
             logger.error(f"Failed to save findings batch: {e}")
             raise
 
-    def get_findings(self, codebase_hash: str, min_severity: Optional[str] = None,
-                    min_confidence: Optional[str] = None, finding_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_findings(
+        self,
+        codebase_hash: str,
+        min_severity: Optional[str] = None,
+        min_confidence: Optional[str] = None,
+        finding_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """Get findings for a codebase with optional filtering.
 
         Args:
@@ -392,7 +475,9 @@ class DBManager:
                 severity_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
                 if min_severity and min_severity in severity_order:
                     min_sev_val = severity_order[min_severity]
-                    severity_levels = [k for k, v in severity_order.items() if v >= min_sev_val]
+                    severity_levels = [
+                        k for k, v in severity_order.items() if v >= min_sev_val
+                    ]
                     if severity_levels:
                         placeholders = ",".join(["?" * len(severity_levels)])
                         query += f" AND severity IN ({','.join(['?'] * len(severity_levels))})"
@@ -402,7 +487,9 @@ class DBManager:
                 if min_confidence and min_confidence in ("high", "medium", "low"):
                     conf_order = {"high": 3, "medium": 2, "low": 1}
                     min_conf_val = conf_order[min_confidence]
-                    confidence_levels = [k for k, v in conf_order.items() if v >= min_conf_val]
+                    confidence_levels = [
+                        k for k, v in conf_order.items() if v >= min_conf_val
+                    ]
                     if confidence_levels:
                         query += f" AND confidence IN ({','.join(['?'] * len(confidence_levels))})"
                         params.extend(confidence_levels)
@@ -446,7 +533,9 @@ class DBManager:
         """
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute("SELECT * FROM findings WHERE id = ?", (finding_id,))
+                cursor = conn.execute(
+                    "SELECT * FROM findings WHERE id = ?", (finding_id,)
+                )
                 row = cursor.fetchone()
                 if row:
                     data = dict(row)
@@ -478,7 +567,9 @@ class DBManager:
         """
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute("DELETE FROM findings WHERE codebase_hash = ?", (codebase_hash,))
+                cursor = conn.execute(
+                    "DELETE FROM findings WHERE codebase_hash = ?", (codebase_hash,)
+                )
                 conn.commit()
                 return cursor.rowcount
         except Exception as e:
@@ -497,30 +588,47 @@ class DBManager:
         try:
             with self._get_connection() as conn:
                 # Total count
-                cursor = conn.execute("SELECT COUNT(*) as count FROM findings WHERE codebase_hash = ?",
-                                    (codebase_hash,))
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as count FROM findings WHERE codebase_hash = ?",
+                    (codebase_hash,),
+                )
                 total = cursor.fetchone()["count"]
 
                 # Count by severity
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT severity, COUNT(*) as count FROM findings
                     WHERE codebase_hash = ? GROUP BY severity
-                """, (codebase_hash,))
-                by_severity = {row["severity"]: row["count"] for row in cursor.fetchall()}
+                """,
+                    (codebase_hash,),
+                )
+                by_severity = {
+                    row["severity"]: row["count"] for row in cursor.fetchall()
+                }
 
                 # Count by type
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT finding_type, COUNT(*) as count FROM findings
                     WHERE codebase_hash = ? GROUP BY finding_type
-                """, (codebase_hash,))
-                by_type = {row["finding_type"]: row["count"] for row in cursor.fetchall()}
+                """,
+                    (codebase_hash,),
+                )
+                by_type = {
+                    row["finding_type"]: row["count"] for row in cursor.fetchall()
+                }
 
                 # Count by confidence
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT confidence, COUNT(*) as count FROM findings
                     WHERE codebase_hash = ? GROUP BY confidence
-                """, (codebase_hash,))
-                by_confidence = {row["confidence"]: row["count"] for row in cursor.fetchall()}
+                """,
+                    (codebase_hash,),
+                )
+                by_confidence = {
+                    row["confidence"]: row["count"] for row in cursor.fetchall()
+                }
 
                 return {
                     "total": total,

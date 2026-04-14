@@ -180,6 +180,36 @@ class TestTaintFlowInvestigationPrompt:
             content = result.messages[0].content.text
             assert 'language="java"' in content
 
+    @pytest.mark.asyncio
+    async def test_with_invalid_locations(self, mcp_with_prompts):
+        """Invalid locations should fall back to discovery mode"""
+        async with Client(mcp_with_prompts) as client:
+            # Test with invalid format (no colon)
+            result = await client.get_prompt(
+                "taint_flow_investigation",
+                arguments={
+                    "codebase_hash": "abc123",
+                    "source_location": "main.c",
+                    "sink_location": "utils.c",
+                },
+            )
+            content = result.messages[0].content.text
+            # Should fall back to discovery mode
+            assert 'mode="auto"' in content
+            assert "Discover All Taint Flows" in content
+
+            # Test with non-integer line number
+            result2 = await client.get_prompt(
+                "taint_flow_investigation",
+                arguments={
+                    "codebase_hash": "abc123",
+                    "source_location": "main.c:not_a_number",
+                    "sink_location": "utils.c:100",
+                },
+            )
+            content2 = result2.messages[0].content.text
+            assert 'mode="auto"' in content2
+
 
 class TestAttackSurfaceMapPrompt:
     """Test attack_surface_map prompt"""
@@ -403,9 +433,7 @@ class TestConfidencePolicy:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("prompt_name,args", PROMPTS_WITH_CONFIDENCE)
-    async def test_confidence_policy_present(
-        self, mcp_with_prompts, prompt_name, args
-    ):
+    async def test_confidence_policy_present(self, mcp_with_prompts, prompt_name, args):
         """Every prompt should include the confidence policy"""
         async with Client(mcp_with_prompts) as client:
             result = await client.get_prompt(prompt_name, arguments=args)
