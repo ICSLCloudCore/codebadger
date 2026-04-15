@@ -37,9 +37,9 @@ services:
       - codebadger-joern-server
     environment:
       # Optional: Override default config via environment variables
-      # - MCP_PORT=4242
-      # - MCP_LOG_LEVEL=INFO
-      # - JOERN_MEMORY_LIMIT=4g
-      # - OTEL_ENABLED=false
+      - MCP_PORT=4242
+      - MCP_LOG_LEVEL=INFO
+      - JOERN_MEMORY_LIMIT=4g
+      - OTEL_ENABLED=false
     restart: unless-stopped
 
