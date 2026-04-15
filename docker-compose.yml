@@ -14,3 +14,32 @@ services:
       - ./playground:/playground
     restart: unless-stopped
 
+  # MCP Server (container)
+  codebadger-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    image: codebadger-mcp-server:latest
+    container_name: codebadger-mcp-server
+    ports:
+      # Expose MCP server port
+      - "4242:4242"
+    volumes:
+      # Mount docker socket to allow MCP service manage Joern container
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount playground for shared CPG storage
+      - ./playground:/app/playground
+      # Persist codebadger database
+      - ./codebadger.db:/app/codebadger.db
+      # Optional: Mount custom config file (uncomment to use)
+      - ./config.yaml:/app/config.yaml
+    depends_on:
+      - codebadger-joern-server
+    environment:
+      # Optional: Override default config via environment variables
+      # - MCP_PORT=4242
+      # - MCP_LOG_LEVEL=INFO
+      # - JOERN_MEMORY_LIMIT=4g
+      # - OTEL_ENABLED=false
+    restart: unless-stopped
+
