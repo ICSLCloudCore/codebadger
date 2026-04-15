@@ -35,6 +35,9 @@ services:
       - ./config.yaml:/app/config.yaml
       # 需要挂载代码目录，容器和主机的代码目录保持一致
       - /data/code/:/data/code
+    # 加入宿主机docker组，获取docker socket访问权限，替换为宿主机docker组的gid（执行getent group docker | cut -d: -f3获取）
+    group_add:
+      - 114
     depends_on:
       - codebadger-joern-server
     environment:
