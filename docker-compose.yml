@@ -33,6 +33,8 @@ services:
       - ./codebadger.db:/app/codebadger.db
       # Optional: Mount custom config file (uncomment to use)
       - ./config.yaml:/app/config.yaml
+      # 需要挂载代码目录，容器和主机的代码目录保持一致
+      - /code/data/:/code/data
     depends_on:
       - codebadger-joern-server
     environment:
