@@ -2,7 +2,7 @@ server:
   host: ${MCP_HOST:127.0.0.1}
   port: ${MCP_PORT:4242}
   log_level: ${MCP_LOG_LEVEL:INFO}
-  transport: ${MCP_TRANSPORT:sse}  # 支持 http 或 sse 两种传输模式
+  transport: ${MCP_TRANSPORT:http}  # 支持 http 或 sse 两种传输模式
 
 joern:
   binary_path: ${JOERN_BINARY_PATH:joern}
