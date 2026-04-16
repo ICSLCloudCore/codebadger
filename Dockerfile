@@ -7,7 +7,7 @@ RUN sed -i.bak \
     -e 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' \
     -e 's/security.ubuntu.com/mirrors.ustc.edu.cn/g' \
     /etc/apt/sources.list && \
-    # 安装基础依赖
+    # 安装基础依赖（直接使用Ubuntu 22.04自带Python 3.10，无需额外PPA）
     apt-get update -y --fix-missing && \
     apt-get install -y --no-install-recommends \
     curl \
@@ -15,23 +15,15 @@ RUN sed -i.bak \
     unzip \
     git \
     ca-certificates \
-    software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa -y && \
-    apt-get update -y && \
-    # 安装Python 3.12
-    apt-get install -y --no-install-recommends \
-    python3.12 \
-    python3.12-dev \
-    python3.12-venv \
-    python3.12-distutils \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    python3-distutils \
     && rm -rf /var/lib/apt/lists/*
 
-# 配置Python3.12为默认python
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
-    # 给Python3.12安装pip
-    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python3 get-pip.py && \
-    rm get-pip.py && \
+# 配置Python为默认命令
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1 && \
     pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Set Joern version
