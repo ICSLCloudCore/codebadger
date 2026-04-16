@@ -126,10 +126,10 @@ async def app_lifespan(server: FastMCP):
     # Ensure required directories exist
     os.makedirs(config.storage.workspace_root, exist_ok=True)
 
-        # Create playground directory from config
-        playground_dir = config.storage.workspace_root
-        cpgs_dir = os.path.join(playground_dir, "cpgs")
-        codebases_dir = os.path.join(playground_dir, "codebases")
+    # Create playground directory from config
+    playground_dir = config.storage.workspace_root
+    cpgs_dir = os.path.join(playground_dir, "cpgs")
+    codebases_dir = os.path.join(playground_dir, "codebases")
 
     os.makedirs(cpgs_dir, exist_ok=True)
     os.makedirs(codebases_dir, exist_ok=True)
