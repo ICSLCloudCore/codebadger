@@ -23,13 +23,16 @@ RUN sed -i.bak \
     python3.12 \
     python3.12-dev \
     python3.12-venv \
-    python3-pip \
+    python3.12-distutils \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置Python3.12为默认python
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
-    update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.12 1 && \
-    pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    # 给Python3.12安装pip
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python3 get-pip.py && \
+    rm get-pip.py && \
+    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Set Joern version
 ENV JOERN_VERSION=4.0.516
