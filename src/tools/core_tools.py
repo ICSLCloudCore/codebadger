@@ -5,7 +5,7 @@ Provides core CPG management functionality
 """
 
 import asyncio
-import docker
+
 import hashlib
 import io
 import logging
@@ -258,33 +258,8 @@ async def _generate_cpg_async(
                 )
                 return
 
-        # Use Docker API to generate CPG inside container
-        docker_client = docker.from_env()
-        container_name = "codebadger-joern-server"
+        # All-in-one mode: generate CPG locally
         joern_server_manager = services.get("joern_server_manager")
-        if joern_server_manager:
-            container_name = joern_server_manager.container_name
-        try:
-            container = docker_client.containers.get(container_name)
-        except docker.errors.NotFound:
-            error_msg = (
-                f"Docker container '{container_name}' not found. "
-                f"Please start it with: docker compose up -d"
-            )
-            logger.error(error_msg)
-            codebase_tracker.update_codebase(
-                codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": error_msg},
-            )
-            return
-        except docker.errors.DockerException as e:
-            error_msg = f"Docker error: {e}"
-            logger.error(error_msg)
-            codebase_tracker.update_codebase(
-                codebase_hash=codebase_hash,
-                metadata={"status": "failed", "error": error_msg},
-            )
-            return
 
         # Get language-specific command
         language_commands = {
@@ -343,14 +318,23 @@ async def _generate_cpg_async(
         import shlex
 
         logger.info(
-            f"Executing CPG generation in container: {' '.join(shlex.quote(arg) for arg in cmd)}"
+            f"Executing CPG generation locally: {' '.join(shlex.quote(arg) for arg in cmd)}"
         )
 
-        # Execute CPG generation
-        exec_result = container.exec_run(cmd=cmd, stream=False)
+        import subprocess
 
-        if exec_result.exit_code != 0:
-            error_msg = f"CPG generation failed: {exec_result.output.decode('utf-8')}"
+        # Execute CPG generation locally
+        exec_result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=config.cpg.generation_timeout if config else 600,
+        )
+
+        if exec_result.returncode != 0:
+            error_msg = (
+                f"CPG generation failed: {exec_result.stdout + exec_result.stderr}"
+            )
             logger.error(error_msg)
             codebase_tracker.update_codebase(
                 codebase_hash=codebase_hash,
@@ -368,7 +352,7 @@ async def _generate_cpg_async(
                 joern_port = joern_server_manager.spawn_server(codebase_hash)
                 logger.info(f"Joern server started on port {joern_port}")
 
-                # Load CPG into server (use container path, not host path)
+                # Load CPG into server (use local path)
                 if joern_server_manager.load_cpg(codebase_hash, container_cpg_path):
                     logger.info(f"CPG loaded into Joern server on port {joern_port}")
                 else:

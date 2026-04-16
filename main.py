@@ -22,7 +22,7 @@ from src.services import (
     JoernServerManager,
     PortManager,
     QueryExecutor,
-    CodeBrowsingService
+    CodeBrowsingService,
 )
 from src.utils import DBManager, setup_logging
 from src.tools import register_tools
@@ -57,17 +57,25 @@ def _setup_telemetry(config) -> None:
         provider = TracerProvider(resource=resource)
 
         if telemetry.otlp_protocol == "grpc":
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                OTLPSpanExporter,
+            )
         else:
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+                OTLPSpanExporter,
+            )
 
         exporter = OTLPSpanExporter(endpoint=telemetry.otlp_endpoint)
         provider.add_span_processor(BatchSpanProcessor(exporter))
         trace.set_tracer_provider(provider)
 
-        logger.info(f"OpenTelemetry enabled: exporting to {telemetry.otlp_endpoint} via {telemetry.otlp_protocol}")
+        logger.info(
+            f"OpenTelemetry enabled: exporting to {telemetry.otlp_endpoint} via {telemetry.otlp_protocol}"
+        )
     except ImportError:
-        logger.warning("OpenTelemetry packages not installed. Install with: pip install opentelemetry-sdk opentelemetry-exporter-otlp")
+        logger.warning(
+            "OpenTelemetry packages not installed. Install with: pip install opentelemetry-sdk opentelemetry-exporter-otlp"
+        )
     except Exception as e:
         logger.warning(f"Failed to initialize OpenTelemetry: {e}")
 
@@ -78,24 +86,24 @@ async def _graceful_shutdown():
 
     try:
         # Terminate all Joern servers
-        if 'joern_server_manager' in services:
+        if "joern_server_manager" in services:
             logger.info("Terminating all Joern servers...")
-            services['joern_server_manager'].terminate_all_servers()
+            services["joern_server_manager"].terminate_all_servers()
             logger.info("All Joern servers terminated")
 
         # Release all ports
-        if 'port_manager' in services:
+        if "port_manager" in services:
             logger.info("Releasing allocated ports...")
             try:
-                services['port_manager'].release_all_ports()
+                services["port_manager"].release_all_ports()
             except Exception as e:
                 logger.warning(f"Error releasing ports: {e}")
 
         # Flush database and caches
-        if 'db_manager' in services:
+        if "db_manager" in services:
             logger.info("Flushing database...")
             try:
-                services['db_manager'].close()
+                services["db_manager"].close()
             except Exception as e:
                 logger.warning(f"Error closing database: {e}")
 
@@ -118,11 +126,10 @@ async def app_lifespan(server: FastMCP):
     # Ensure required directories exist
     os.makedirs(config.storage.workspace_root, exist_ok=True)
 
-    # Create playground directory relative to project root
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    playground_dir = os.path.join(project_root, "playground")
-    cpgs_dir = os.path.join(playground_dir, "cpgs")
-    codebases_dir = os.path.join(playground_dir, "codebases")
+        # Create playground directory from config
+        playground_dir = config.storage.workspace_root
+        cpgs_dir = os.path.join(playground_dir, "cpgs")
+        codebases_dir = os.path.join(playground_dir, "codebases")
 
     os.makedirs(cpgs_dir, exist_ok=True)
     os.makedirs(codebases_dir, exist_ok=True)
@@ -135,67 +142,45 @@ async def app_lifespan(server: FastMCP):
         logger.info("DB Manager initialized")
 
         # Initialize services
-        services['config'] = config
-        services['db_manager'] = db_manager
-        services['codebase_tracker'] = CodebaseTracker(db_manager)
-        services['git_manager'] = GitManager(config.storage.workspace_root)
+        services["config"] = config
+        services["db_manager"] = db_manager
+        services["codebase_tracker"] = CodebaseTracker(db_manager)
+        services["git_manager"] = GitManager(config.storage.workspace_root)
 
         # Initialize port manager for Joern servers
-        services['port_manager'] = PortManager(
-            port_min=config.joern.port_min,
-            port_max=config.joern.port_max
+        services["port_manager"] = PortManager(
+            port_min=config.joern.port_min, port_max=config.joern.port_max
         )
 
         # Initialize Joern server manager (runs servers inside Docker container)
         container_name = os.getenv("JOERN_CONTAINER_NAME", "codebadger-joern-server")
-        services['joern_server_manager'] = JoernServerManager(
+        services["joern_server_manager"] = JoernServerManager(
             joern_binary_path=config.joern.binary_path,
             container_name=container_name,
-            config=config
+            config=config,
         )
 
-        # Verify the Docker container is running before proceeding
-        try:
-            import docker
-            docker_client = docker.from_env()
-            container = docker_client.containers.get(container_name)
-            if container.status != "running":
-                logger.error(
-                    f"Docker container '{container_name}' exists but is not running "
-                    f"(status: {container.status}). Please start it with: docker compose up -d"
-                )
-                raise RuntimeError(
-                    f"Docker container '{container_name}' is not running. "
-                    f"Run 'docker compose up -d' first."
-                )
-            logger.info(f"Docker container '{container_name}' is running")
-        except docker.errors.NotFound:
-            logger.error(
-                f"Docker container '{container_name}' not found. "
-                f"Please start it with: docker compose up -d"
-            )
-            raise RuntimeError(
-                f"Docker container '{container_name}' not found. "
-                f"Run 'docker compose up -d' first."
-            )
-        except docker.errors.DockerException as e:
-            logger.error(f"Cannot connect to Docker daemon: {e}")
-            raise RuntimeError(
-                f"Cannot connect to Docker daemon. Is Docker running? Error: {e}"
-            )
+        # All-in-one mode: no external Joern container needed, skip Docker check
+        logger.info(
+            "All-in-one mode: Joern CLI running locally, skipping Docker container check"
+        )
 
         # Initialize CPG generator (runs Joern CLI directly in container)
-        services['cpg_generator'] = CPGGenerator(config=config, joern_server_manager=services['joern_server_manager'])
+        services["cpg_generator"] = CPGGenerator(
+            config=config, joern_server_manager=services["joern_server_manager"]
+        )
         # Skip initialize() - no Docker needed
 
         # Initialize query executor with Joern server manager
-        services['query_executor'] = QueryExecutor(services['joern_server_manager'], config=config.query)
+        services["query_executor"] = QueryExecutor(
+            services["joern_server_manager"], config=config.query
+        )
 
         # Initialize Code Browsing Service
-        services['code_browsing_service'] = CodeBrowsingService(
-            services['codebase_tracker'],
-            services['query_executor'],
-            services['db_manager']
+        services["code_browsing_service"] = CodeBrowsingService(
+            services["codebase_tracker"],
+            services["query_executor"],
+            services["db_manager"],
         )
 
         # Register MCP tools now that services are initialized
@@ -215,10 +200,7 @@ async def app_lifespan(server: FastMCP):
 
 
 # Initialize FastMCP server
-mcp = FastMCP(
-    "CodeBadger Server",
-    lifespan=app_lifespan
-)
+mcp = FastMCP("CodeBadger Server", lifespan=app_lifespan)
 
 # Note: Tools are registered inside the lifespan function
 # register_tools(mcp, services)
@@ -232,7 +214,9 @@ def _get_disk_usage(path: str) -> dict:
             "total_gb": round(stat.total / (1024**3), 2),
             "used_gb": round(stat.used / (1024**3), 2),
             "free_gb": round(stat.free / (1024**3), 2),
-            "percent_used": round((stat.used / stat.total) * 100, 2) if stat.total > 0 else 0
+            "percent_used": round((stat.used / stat.total) * 100, 2)
+            if stat.total > 0
+            else 0,
         }
     except Exception as e:
         logger.debug(f"Error getting disk usage for {path}: {e}")
@@ -258,7 +242,7 @@ def _get_cache_size() -> dict:
         return {
             "cache_path": cpgs_dir,
             "size_mb": round(total_size / (1024**2), 2),
-            "exists": os.path.exists(cpgs_dir)
+            "exists": os.path.exists(cpgs_dir),
         }
     except Exception as e:
         logger.debug(f"Error calculating cache size: {e}")
@@ -268,16 +252,16 @@ def _get_cache_size() -> dict:
 def _check_joern_container_status() -> dict:
     """Check Joern Docker container status"""
     try:
-        if 'joern_server_manager' not in services:
+        if "joern_server_manager" not in services:
             return {"error": "Joern server manager not initialized"}
 
-        joern_mgr = services['joern_server_manager']
+        joern_mgr = services["joern_server_manager"]
         try:
             container = joern_mgr.docker_client.containers.get(joern_mgr.container_name)
             return {
                 "container_name": joern_mgr.container_name,
                 "status": container.status,
-                "running": container.status == "running"
+                "running": container.status == "running",
             }
         except Exception as e:
             logger.debug(f"Error checking container status: {e}")
@@ -285,7 +269,7 @@ def _check_joern_container_status() -> dict:
                 "container_name": joern_mgr.container_name,
                 "status": "not_found",
                 "running": False,
-                "error": str(e)
+                "error": str(e),
             }
     except Exception as e:
         logger.debug(f"Error in Joern container status check: {e}")
@@ -295,10 +279,10 @@ def _check_joern_container_status() -> dict:
 def _get_active_servers() -> dict:
     """Get information about active Joern servers"""
     try:
-        if 'joern_server_manager' not in services:
+        if "joern_server_manager" not in services:
             return {"error": "Joern server manager not initialized", "count": 0}
 
-        joern_mgr = services['joern_server_manager']
+        joern_mgr = services["joern_server_manager"]
         running_servers = joern_mgr.get_running_servers()
 
         servers = {}
@@ -307,21 +291,15 @@ def _get_active_servers() -> dict:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(1)
-                result = sock.connect_ex(('localhost', port))
+                result = sock.connect_ex(("localhost", port))
                 sock.close()
                 is_accessible = result == 0
             except Exception:
                 is_accessible = False
 
-            servers[codebase_hash] = {
-                "port": port,
-                "accessible": is_accessible
-            }
+            servers[codebase_hash] = {"port": port, "accessible": is_accessible}
 
-        return {
-            "count": len(servers),
-            "servers": servers
-        }
+        return {"count": len(servers), "servers": servers}
     except Exception as e:
         logger.debug(f"Error getting active servers: {e}")
         return {"error": str(e), "count": 0}
@@ -330,10 +308,10 @@ def _get_active_servers() -> dict:
 def _get_port_utilization() -> dict:
     """Get port manager utilization information"""
     try:
-        if 'port_manager' not in services:
+        if "port_manager" not in services:
             return {"error": "Port manager not initialized"}
 
-        port_mgr = services['port_manager']
+        port_mgr = services["port_manager"]
         allocations = port_mgr.get_all_allocations()
         allocated_count = len(allocations)
         available_count = port_mgr.available_count()
@@ -342,7 +320,11 @@ def _get_port_utilization() -> dict:
             "allocated_count": allocated_count,
             "available_count": available_count,
             "total_pool_size": allocated_count + available_count,
-            "utilization_percent": round((allocated_count / (allocated_count + available_count) * 100)) if (allocated_count + available_count) > 0 else 0
+            "utilization_percent": round(
+                (allocated_count / (allocated_count + available_count) * 100)
+            )
+            if (allocated_count + available_count) > 0
+            else 0,
         }
     except Exception as e:
         logger.debug(f"Error getting port utilization: {e}")
@@ -364,7 +346,7 @@ async def health_check(request):
             "active_servers": _get_active_servers(),
             "port_utilization": _get_port_utilization(),
             "disk_usage": _get_disk_usage(project_root),
-            "cache_info": _get_cache_size()
+            "cache_info": _get_cache_size(),
         }
 
         # Determine overall health status
@@ -375,27 +357,29 @@ async def health_check(request):
         return JSONResponse(health_status)
     except Exception as e:
         logger.error(f"Error in health check: {e}", exc_info=True)
-        return JSONResponse({
-            "status": "unhealthy",
-            "service": "codebadger",
-            "version": VERSION,
-            "error": str(e)
-        }, status_code=500)
+        return JSONResponse(
+            {
+                "status": "unhealthy",
+                "service": "codebadger",
+                "version": VERSION,
+                "error": str(e),
+            },
+            status_code=500,
+        )
 
 
 # Root endpoint
 @mcp.custom_route("/", methods=["GET"])
 async def root(request):
     """Root endpoint providing basic server information"""
-    return JSONResponse({
-        "service": "codebadger",
-        "description": "CodeBadger for static code analysis using Code Property Graph technology",
-        "version": VERSION,
-        "endpoints": {
-            "health": "/health",
-            "mcp": "/mcp"
+    return JSONResponse(
+        {
+            "service": "codebadger",
+            "description": "CodeBadger for static code analysis using Code Property Graph technology",
+            "version": VERSION,
+            "endpoints": {"health": "/health", "mcp": "/mcp"},
         }
-    })
+    )
 
 
 if __name__ == "__main__":
@@ -404,15 +388,17 @@ if __name__ == "__main__":
     host = config_data.server.host
     port = config_data.server.port
     transport_type = config_data.server.transport_type
-    
+
     # Validate transport type
     valid_transports = ["http", "sse", "stdio"]
     if transport_type not in valid_transports:
-        logger.warning(f"Invalid transport type '{transport_type}', falling back to 'http'")
+        logger.warning(
+            f"Invalid transport type '{transport_type}', falling back to 'http'"
+        )
         transport_type = "http"
-    
+
     logger.info(f"Starting CodeBadger Server with {transport_type} transport")
-    
+
     if transport_type == "stdio":
         # Use stdio transport (standard input/output)
         mcp.run(transport="stdio")

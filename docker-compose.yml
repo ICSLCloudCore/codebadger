@@ -1,50 +1,33 @@
 services:
-  # Joern server (container)
-  codebadger-joern-server:
+  # All-in-one CodeBadger service (Joern + MCP server)
+  codebadger:
     build:
       context: .
       dockerfile: Dockerfile
-    image: codebadger-joern-server:latest
-    container_name: codebadger-joern-server
+    image: codebadger:latest
+    container_name: codebadger
     ports:
-      # Expose ports 13371-13399 for Joern servers
+      # MCP server port
+      - "4242:4242"
+      # Joern server port range
       - "13371-13399:13371-13399"
     volumes:
-      # Mount playground for CPG storage (shared with host)
+      # Mount playground for CPG/code persistent storage
       - ./playground:/playground
-    restart: unless-stopped
-
-  # MCP Server (container)
-  codebadger-mcp-server:
-    build:
-      context: .
-      dockerfile: Dockerfile.mcp
-    image: codebadger-mcp-server:latest
-    container_name: codebadger-mcp-server
-    ports:
-      # Expose MCP server port
-      - "4242:4242"
-    volumes:
-      # Mount docker socket to allow MCP service manage Joern container
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Mount playground for shared CPG storage
-      - ./playground:/app/playground
-      # Persist codebadger database
-      - ./codebadger.db:/app/codebadger.db
       # Optional: Mount custom config file (uncomment to use)
       - ./config.yaml:/app/config.yaml
-      # 需要挂载代码目录，容器和主机的代码目录保持一致
+      # 挂载需要分析的代码目录，可根据实际需求修改
       - /data/code/:/data/code
-    # 加入宿主机docker组，获取docker socket访问权限，替换为宿主机docker组的gid（执行getent group docker | cut -d: -f3获取）
-    group_add:
-      - 114
-    depends_on:
-      - codebadger-joern-server
     environment:
       # Optional: Override default config via environment variables
       - MCP_PORT=4242
       - MCP_LOG_LEVEL=INFO
-      - JOERN_MEMORY_LIMIT=4g
+      - JOERN_MEMORY_LIMIT=8g
       - OTEL_ENABLED=false
+      - CPG_GENERATION_TIMEOUT=1200
     restart: unless-stopped
-
+    ulimits:
+      # Increase open file limit for Joern
+      nofile:
+        soft: 65536
+        hard: 65536

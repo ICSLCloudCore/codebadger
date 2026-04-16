@@ -291,52 +291,21 @@ class CPGGenerator:
             return re.escape(pattern)
 
     def _host_to_container_path(self, host_path: str) -> str:
-        """Convert host path to container path
-
-        The container mounts ./playground as /playground
-        So /home/aleks/workspace/codebadger/playground/cpgs/hash/cpg.bin
-            becomes /playground/cpgs/hash/cpg.bin
-        """
-        # Find the playground directory in the path
-        if "/playground/" not in host_path:
-            logger.warning(f"Path doesn't contain '/playground/': {host_path}")
-            return host_path
-
-        # Extract everything after /playground/
-        parts = host_path.split("/playground/")
-        if len(parts) >= 2:
-            return f"/playground/{parts[-1]}"
-
+        """All-in-one mode: no path conversion needed, use local path directly"""
         return host_path
 
     def _exec_command_sync(self, cmd_args: list, env: dict, timeout: int) -> str:
-        """Execute command synchronously INSIDE Docker container with timeout"""
-        # Get the container name from environment or use default
-        container_name = os.getenv("JOERN_CONTAINER_NAME", "codebadger-joern-server")
-
-        # Build docker exec command
-        # Format: docker exec -e VAR=value CONTAINER COMMAND
-        docker_cmd = ["docker", "exec"]
-
-        # Add environment variables BEFORE the container name
-        for key, value in env.items():
-            if key not in os.environ or env[key] != os.environ[key]:
-                docker_cmd.extend(["-e", f"{key}={value}"])
-
-        # Container name
-        docker_cmd.append(container_name)
-
-        # The actual command to run inside container
-        docker_cmd.extend(cmd_args)
-
-        logger.info(f"Executing in container: {' '.join(docker_cmd)}")
+        """Execute command synchronously locally (all-in-one mode)"""
+        logger.info(
+            f"Executing locally: {' '.join(shlex.quote(arg) for arg in cmd_args)}"
+        )
 
         try:
             result = subprocess.run(
-                docker_cmd, capture_output=True, text=True, timeout=timeout
+                cmd_args, capture_output=True, text=True, timeout=timeout, env=env
             )
 
-            logger.info(f"Docker exec return code: {result.returncode}")
+            logger.info(f"Command return code: {result.returncode}")
 
             # Combine stdout and stderr
             output = result.stdout + result.stderr
@@ -345,10 +314,10 @@ class CPGGenerator:
 
             return output
         except subprocess.TimeoutExpired as e:
-            logger.error(f"Docker exec command timed out after {timeout}s")
+            logger.error(f"Command timed out after {timeout}s")
             raise asyncio.TimeoutError(f"Command timed out after {timeout}s") from e
         except Exception as e:
-            logger.error(f"Error executing docker exec: {e}")
+            logger.error(f"Error executing command: {e}")
             raise
 
     def _validate_cpg(self, cpg_path: str) -> bool:

@@ -1,23 +1,35 @@
-# Dockerfile for Joern Server Container
-# Contains Joern CLI for CPG generation and caching
-
+# All-in-one Dockerfile for CodeBadger (Joern + MCP Service)
+# 基于Joern镜像整合MCP服务，单容器承载所有业务能力
 FROM eclipse-temurin:21-jdk-jammy
 
-# 核心优化：替换为中科大+网易双源（阿里云源失效替代）
+# 替换国内镜像源加速安装
 RUN sed -i.bak \
-    # 替换Ubuntu官方源为中科大源（优先）
     -e 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' \
     -e 's/security.ubuntu.com/mirrors.ustc.edu.cn/g' \
-    # 兜底：若中科大源不可用，替换为网易源
-    -e 's/mirrors.ustc.edu.cn/mirrors.163.com/g' \
     /etc/apt/sources.list && \
-    # 更新源（修复缺失包）+ 安装依赖
+    # 安装基础依赖
     apt-get update -y --fix-missing && \
     apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
+    git \
+    ca-certificates \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt-get update -y && \
+    # 安装Python 3.12
+    apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# 配置Python3.12为默认python
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    update-alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.12 1 && \
+    pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Set Joern version
 ENV JOERN_VERSION=4.0.516
@@ -35,18 +47,6 @@ RUN mkdir -p ${JOERN_HOME} && \
     ./joern-install.sh --version=v${JOERN_VERSION} && \
     rm -rf joern-install.sh joern-cli.zip
 
-# RUN mkdir -p ${JOERN_HOME} && \
-#     cd /tmp && \
-#     # 改用GitHub镜像站下载安装脚本（解决访问问题）
-#     wget -q --timeout=30 --tries=3 https://ghproxy.com/https://github.com/joernio/joern/releases/download/v${JOERN_VERSION}/joern-install.sh || \
-#     wget -q --timeout=30 --tries=3 https://mirror.ghproxy.com/https://github.com/joernio/joern/releases/download/v${JOERN_VERSION}/joern-install.sh && \
-#     chmod +x joern-install.sh && \
-#     sed -i 's/sudo //g' joern-install.sh && \
-#     # 给安装脚本也配置镜像源（关键：解决joern-cli.zip下载失败）
-#     sed -i 's|https://github.com|https://ghproxy.com/https://github.com|g' joern-install.sh && \
-#     ./joern-install.sh && \
-#     rm -rf joern-install.sh joern-cli.zip
-
 # Add Joern CLI tools to PATH
 ENV PATH="${JOERN_HOME}/joern-cli:${JOERN_HOME}/joern-cli/bin:${PATH}"
 
@@ -56,13 +56,27 @@ RUN mkdir -p /playground
 # Verify Joern installation
 RUN joern --help
 
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Keep container running\n\
-tail -f /dev/null\n\
-' > /entrypoint.sh && chmod +x /entrypoint.sh
+# 设置工作目录
+WORKDIR /app
 
-# Run entrypoint script
-CMD ["/entrypoint.sh"]
+# 复制MCP服务依赖文件
+COPY requirements.txt .
+
+# 安装Python依赖
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制MCP服务代码
+COPY main.py .
+COPY src/ ./src/
+
+# 设置环境变量
+ENV MCP_HOST=0.0.0.0
+ENV WORKSPACE_ROOT=/playground
+ENV PYTHONUNBUFFERED=1
+
+# 暴露端口
+EXPOSE 4242
+EXPOSE 13371-13399
+
+# 启动服务，直接使用MCP服务作为入口
+CMD ["python", "main.py"]

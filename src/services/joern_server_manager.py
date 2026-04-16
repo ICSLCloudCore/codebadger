@@ -7,8 +7,8 @@ import time
 import os
 from typing import Dict, Optional
 
-import docker
-from docker.errors import DockerException, NotFound, APIError
+import subprocess
+import shlex
 
 from .port_manager import PortManager
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class JoernServerManager:
-    """Manages individual Joern server instances running in Docker container using Docker Python API"""
+    """Manages individual Joern server instances running locally (all-in-one mode)"""
 
     def __init__(
         self,
@@ -34,7 +34,6 @@ class JoernServerManager:
             )
         else:
             self.port_manager = PortManager()
-        self.docker_client = docker.from_env()
         # _exec_ids will store the exec instance IDs for running joern servers
         self._exec_ids: Dict[str, str] = {}  # codebase_hash -> exec_id or container_id
         self._ports: Dict[str, int] = {}  # codebase_hash -> port
@@ -45,13 +44,13 @@ class JoernServerManager:
 
     def spawn_server(self, codebase_hash: str) -> int:
         """
-        Spawn a new Joern server instance INSIDE the existing Docker container for the given codebase
+        Spawn a new Joern server instance locally for the given codebase
 
         Args:
             codebase_hash: The codebase identifier
 
         Returns:
-            Port number where the server is running (on host, maps to container)
+            Port number where the server is running
         """
         try:
             # Check if server already exists for THIS codebase
@@ -68,19 +67,10 @@ class JoernServerManager:
                     )
                     self._cleanup_server(codebase_hash)
 
-            # Allocate a port (on host side - maps to container)
+            # Allocate a port
             port = self.port_manager.allocate_port(codebase_hash)
 
-            # Get the existing container
-            try:
-                container = self.docker_client.containers.get(self.container_name)
-            except NotFound:
-                logger.error(f"Container {self.container_name} not found")
-                self.port_manager.release_port(codebase_hash)
-                raise RuntimeError(f"Container {self.container_name} not found")
-
-            # Start Joern server inside the existing container using exec
-            # Use nohup and background to keep it running
+            # Start Joern server locally using nohup and background to keep it running
             # IMPORTANT: Run in unique directory to isolate Joern workspace
             # Use parameterized commands to prevent command injection
             work_dir = f"/tmp/joern-server-{codebase_hash}"
@@ -92,34 +82,26 @@ class JoernServerManager:
                 f"export JAVA_OPTS='{java_opts}' && " if java_opts else ""
             )
 
-            # Build command as array to prevent injection
-            joern_cmd = [
-                "bash",
-                "-c",
-                f"{java_opts_export}mkdir -p '{work_dir}' && cd '{work_dir}' && nohup /opt/joern/joern-cli/joern --server --server-host 0.0.0.0 --server-port {port} > '{log_file}' 2>&1 &",
-            ]
+            # Build command
+            joern_cmd = f"{java_opts_export}mkdir -p '{work_dir}' && cd '{work_dir}' && nohup /opt/joern/joern-cli/joern --server --server-host 0.0.0.0 --server-port {port} > '{log_file}' 2>&1 &"
 
             logger.info(
-                f"Starting Joern server for {codebase_hash} on port {port} inside container {self.container_name}"
+                f"Starting Joern server for {codebase_hash} on port {port} locally"
             )
             logger.debug(f"Command: {joern_cmd}")
 
-            # Execute the command in the container
-            exec_result = container.exec_run(
-                cmd=joern_cmd,
-                detach=True,  # Run in background
-                stream=False,
-            )
+            # Execute the command locally
+            subprocess.Popen(joern_cmd, shell=True, start_new_session=True)
 
-            # Store exec info
-            self._exec_ids[codebase_hash] = f"exec-{codebase_hash}"
+            # Store info
+            self._exec_ids[codebase_hash] = f"local-{codebase_hash}"
             self._ports[codebase_hash] = port
 
             logger.info(
                 f"Joern server command executed, waiting for server to be ready on port {port}..."
             )
 
-            # Wait for server to start (JVM + Scala REPL init can take >60s in Docker)
+            # Wait for server to start (JVM + Scala REPL init can take >60s)
             startup_timeout = (
                 self.config.joern.server_startup_timeout if self.config else 120
             )
@@ -134,12 +116,11 @@ class JoernServerManager:
                     f"Joern server for {codebase_hash} failed to become ready on port {port}"
                 )
                 try:
-                    # Use parameterized command to prevent injection
-                    log_result = container.exec_run(cmd=["cat", log_file], stream=False)
-                    if log_result.exit_code == 0:
-                        logger.error(
-                            f"Joern server log:\n{log_result.output.decode('utf-8')}"
-                        )
+                    # Read local log file
+                    if os.path.exists(log_file):
+                        with open(log_file, "r", encoding="utf-8") as f:
+                            log_content = f.read()
+                            logger.error(f"Joern server log:\n{log_content}")
                 except Exception as log_error:
                     logger.warning(f"Could not read log file: {log_error}")
 
@@ -147,14 +128,6 @@ class JoernServerManager:
                 raise RuntimeError(
                     f"Joern server for {codebase_hash} failed to start on port {port}"
                 )
-
-        except DockerException as e:
-            logger.error(
-                f"Docker error while spawning Joern server for {codebase_hash}: {e}",
-                exc_info=True,
-            )
-            self._cleanup_server(codebase_hash)
-            raise
         except Exception as e:
             logger.error(
                 f"Failed to spawn Joern server for {codebase_hash}: {e}", exc_info=True
@@ -238,23 +211,18 @@ class JoernServerManager:
             # Get or create cached client with connection pooling
             client = self.get_or_create_client(codebase_hash)
 
-            # Convert host path to container path for Joern running in Docker
-            # Host path like /home/aleks/.../playground/cpgs/hash/cpg.bin -> /playground/cpgs/hash/cpg.bin
+            # All-in-one mode: path is already local, no conversion needed
             container_cpg_path = cpg_path
-            if "/playground/" in cpg_path:
-                parts = cpg_path.split("/playground/")
-                if len(parts) >= 2:
-                    container_cpg_path = f"/playground/{parts[-1]}"
 
             logger.info(
-                f"Loading CPG {cpg_path} (container: {container_cpg_path}) into Joern server for {codebase_hash} (port {port})"
+                f"Loading CPG {cpg_path} into Joern server for {codebase_hash} (port {port})"
             )
 
             # Retry loading with exponential backoff
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    # Pass the container path to the client with explicit project name
+                    # Pass the local path to the client with explicit project name
                     success = client.load_cpg(
                         container_cpg_path, project_name=codebase_hash, timeout=timeout
                     )
@@ -345,18 +313,11 @@ class JoernServerManager:
             port = self._ports.get(codebase_hash)
             logger.info(f"Terminating Joern server for {codebase_hash} on port {port}")
 
-            # Kill the Joern process inside the container
+            # Kill the Joern process locally
             try:
-                container = self.docker_client.containers.get(self.container_name)
-                # Find and kill the joern process on this port
-                # Use parameterized command to prevent injection
                 if port:
-                    kill_cmd = [
-                        "bash",
-                        "-c",
-                        f"pkill -f 'joern.*--server-port {port}' || true",
-                    ]
-                    container.exec_run(cmd=kill_cmd)
+                    kill_cmd = f"pkill -f 'joern.*--server-port {port}' || true"
+                    subprocess.run(kill_cmd, shell=True, capture_output=True)
                     logger.info(f"Killed Joern server process for {codebase_hash}")
                 else:
                     logger.warning(

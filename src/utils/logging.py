@@ -32,7 +32,6 @@ def setup_logging(log_level: str = "INFO"):
     root_logger.addHandler(console_handler)
 
     # Reduce noise from libraries
-    logging.getLogger("docker").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("git").setLevel(logging.WARNING)
 

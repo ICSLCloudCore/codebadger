@@ -143,5 +143,5 @@ QUERY_CACHE_ENABLED = True
 QUERY_CACHE_TTL = 300
 
 # Storage defaults
-WORKSPACE_ROOT = "/tmp/codebadger"
+WORKSPACE_ROOT = "/playground"
 CLEANUP_ON_SHUTDOWN = True
