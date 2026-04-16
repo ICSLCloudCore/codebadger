@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, Optional, Union, Annotated
 from pydantic import Field
 
 from ..exceptions import (
-            ValidationError,
+    ValidationError,
 )
 from ..utils.validators import validate_codebase_hash
 from .queries import QueryLoader
@@ -19,126 +19,401 @@ logger = logging.getLogger(__name__)
 # Default taint sources by language (used when config is empty)
 DEFAULT_SOURCES = {
     "c": [
-        "getenv", "fgets", "scanf", "read", "recv", "fread", "gets", "getchar",
-        "fscanf", "recvfrom", "recvmsg", "getopt", "getpass", "socket", "accept",
-        "fopen", "getline", "realpath", "getaddrinfo", "gethostbyname",
+        "getenv",
+        "fgets",
+        "scanf",
+        "read",
+        "recv",
+        "fread",
+        "gets",
+        "getchar",
+        "fscanf",
+        "recvfrom",
+        "recvmsg",
+        "getopt",
+        "getpass",
+        "socket",
+        "accept",
+        "fopen",
+        "getline",
+        "realpath",
+        "getaddrinfo",
+        "gethostbyname",
     ],
     "cpp": [
-        "getenv", "fgets", "scanf", "read", "recv", "fread", "gets", "getchar",
-        "fscanf", "recvfrom", "recvmsg", "cin", "getline", "getopt",
+        "getenv",
+        "fgets",
+        "scanf",
+        "read",
+        "recv",
+        "fread",
+        "gets",
+        "getchar",
+        "fscanf",
+        "recvfrom",
+        "recvmsg",
+        "cin",
+        "getline",
+        "getopt",
     ],
     "java": [
-        "getParameter", "getQueryString", "getHeader", "getCookie", "getReader",
-        "getInputStream", "readLine", "readObject", "System.getenv", "System.getProperty",
-        "Scanner.next", "Scanner.nextLine",
+        "getParameter",
+        "getQueryString",
+        "getHeader",
+        "getCookie",
+        "getReader",
+        "getInputStream",
+        "readLine",
+        "readObject",
+        "System.getenv",
+        "System.getProperty",
+        "Scanner.next",
+        "Scanner.nextLine",
     ],
     "python": [
-        "input", "raw_input", "sys.argv", "os.environ", "os.getenv",
-        "request.args", "request.form", "request.json", "request.data", "request.cookies",
-        "request.headers", "request.files",
+        "input",
+        "raw_input",
+        "sys.argv",
+        "os.environ",
+        "os.getenv",
+        "request.args",
+        "request.form",
+        "request.json",
+        "request.data",
+        "request.cookies",
+        "request.headers",
+        "request.files",
     ],
     "javascript": [
-        "req.body", "req.query", "req.params", "req.headers", "req.cookies",
-        "process.env", "process.argv", "fs.readFile", "fetch", "prompt", "readline",
+        "req.body",
+        "req.query",
+        "req.params",
+        "req.headers",
+        "req.cookies",
+        "process.env",
+        "process.argv",
+        "fs.readFile",
+        "fetch",
+        "prompt",
+        "readline",
     ],
     "go": [
-        "os.Args", "os.Getenv", "os.Environ", "flag.String", "flag.Int",
-        "net/http.Request.FormValue", "net/http.Request.Form", "net/http.Request.Header",
-        "net/http.Request.Body", "net/http.Request.Cookies", "io/ioutil.ReadAll",
-        "fmt.Scan", "fmt.Scanf",
+        "os.Args",
+        "os.Getenv",
+        "os.Environ",
+        "flag.String",
+        "flag.Int",
+        "net/http.Request.FormValue",
+        "net/http.Request.Form",
+        "net/http.Request.Header",
+        "net/http.Request.Body",
+        "net/http.Request.Cookies",
+        "io/ioutil.ReadAll",
+        "fmt.Scan",
+        "fmt.Scanf",
+        # Gin framework sources
+        "gin.Context.Query",
+        "gin.Context.DefaultQuery",
+        "gin.Context.PostForm",
+        "gin.Context.DefaultPostForm",
+        "gin.Context.Param",
+        "gin.Context.GetHeader",
+        "gin.Context.Cookie",
+        "gin.Context.ShouldBind",
+        "gin.Context.Bind",
+        "gin.Context.BindJSON",
+        "gin.Context.BindXML",
+        "gin.Context.BindQuery",
+        "gin.Context.GetQuery",
+        "gin.Context.GetPostForm",
+        "gin.Context.FormFile",
+        "gin.Context.MultipartForm",
+        "gin.Context.ClientIP",
+        "gin.Context.UserAgent",
+        # Echo framework sources
+        "echo.Context.QueryParam",
+        "echo.Context.QueryParams",
+        "echo.Context.FormValue",
+        "echo.Context.FormParams",
+        "echo.Context.Param",
+        "echo.Context.ParamByName",
+        "echo.Context.Cookie",
+        "echo.Context.Cookies",
+        "echo.Context.Bind",
+        "echo.Context.BindValidate",
+        "echo.Context.FormFile",
+        "echo.Context.MultipartForm",
+        "echo.Context.RealIP",
+        "echo.Context.UserAgent",
+        "echo.Context.QueryString",
+        # Beego framework sources
+        "beego.Context.Input",
+        "beego.Context.GetCookie",
+        "beego.Controller.GetString",
+        "beego.Controller.GetInt",
+        "beego.Controller.GetBool",
+        "beego.Controller.GetFloat64",
+        "beego.Controller.GetFile",
+        "beego.Input.Get",
+        "beego.Input.Query",
+        "beego.Input.Post",
+        "beego.Input.Param",
+        "beego.Input.Header",
+        "beego.Input.UserAgent",
+        "beego.Input.IP",
     ],
     "csharp": [
-        "Console.ReadLine", "Console.Read", "System.Environment.GetEnvironmentVariable",
-        "Request.QueryString", "Request.Form", "Request.Cookies", "Request.Headers",
-        "Request.Params", "System.IO.File.ReadAllText", "System.Net.Sockets.Socket.Receive",
+        "Console.ReadLine",
+        "Console.Read",
+        "System.Environment.GetEnvironmentVariable",
+        "Request.QueryString",
+        "Request.Form",
+        "Request.Cookies",
+        "Request.Headers",
+        "Request.Params",
+        "System.IO.File.ReadAllText",
+        "System.Net.Sockets.Socket.Receive",
     ],
     "php": [
-        "$_GET", "$_POST", "$_COOKIE", "$_REQUEST", "$_FILES", "$_SERVER", "$_ENV",
-        "getenv", "file_get_contents", "fread", "fgets", "socket_read", "socket_recv",
+        "$_GET",
+        "$_POST",
+        "$_COOKIE",
+        "$_REQUEST",
+        "$_FILES",
+        "$_SERVER",
+        "$_ENV",
+        "getenv",
+        "file_get_contents",
+        "fread",
+        "fgets",
+        "socket_read",
+        "socket_recv",
     ],
     "ruby": [
-        "gets", "read", "params", "ENV", "ARGV", "cookies", "request.body",
-        "request.query_string", "request.headers",
+        "gets",
+        "read",
+        "params",
+        "ENV",
+        "ARGV",
+        "cookies",
+        "request.body",
+        "request.query_string",
+        "request.headers",
     ],
     "swift": [
-        "CommandLine.arguments", "ProcessInfo.processInfo.environment",
-        "String(contentsOf:)", "Data(contentsOf:)", "URL(string:)",
+        "CommandLine.arguments",
+        "ProcessInfo.processInfo.environment",
+        "String(contentsOf:)",
+        "Data(contentsOf:)",
+        "URL(string:)",
     ],
     "kotlin": [
-        "readLine", "Scanner.next", "System.getenv", "System.getProperty",
-        "request.getParameter", "request.getHeader",
+        "readLine",
+        "Scanner.next",
+        "System.getenv",
+        "System.getProperty",
+        "request.getParameter",
+        "request.getHeader",
     ],
     "jimple": [
-        "getParameter", "getQueryString", "getHeader", "getCookie", "getReader",
-        "getInputStream", "readLine", "System.getenv",
+        "getParameter",
+        "getQueryString",
+        "getHeader",
+        "getCookie",
+        "getReader",
+        "getInputStream",
+        "readLine",
+        "System.getenv",
     ],
     "ghidra": [
-        "getenv", "fgets", "scanf", "read", "recv", "fread", "gets",
-        "GetCommandLine", "GetEnvironmentVariable", "ReadFile", "Recv",
+        "getenv",
+        "fgets",
+        "scanf",
+        "read",
+        "recv",
+        "fread",
+        "gets",
+        "GetCommandLine",
+        "GetEnvironmentVariable",
+        "ReadFile",
+        "Recv",
     ],
 }
 
 # Default taint sinks by language (used when config is empty)
 DEFAULT_SINKS = {
     "c": [
-        "system", "popen", "execl", "execv", "execve", "execlp", "execvp",
-        "sprintf", "fprintf", "snprintf", "vsprintf", "strcpy", "strcat",
-        "gets", "memcpy", "memmove", "strncpy", "strncat", "free", "malloc",
-        "printf", "syslog", "open", "fopen", "write", "send", "sendto",
+        "system",
+        "popen",
+        "execl",
+        "execv",
+        "execve",
+        "execlp",
+        "execvp",
+        "sprintf",
+        "fprintf",
+        "snprintf",
+        "vsprintf",
+        "strcpy",
+        "strcat",
+        "gets",
+        "memcpy",
+        "memmove",
+        "strncpy",
+        "strncat",
+        "free",
+        "malloc",
+        "printf",
+        "syslog",
+        "open",
+        "fopen",
+        "write",
+        "send",
+        "sendto",
     ],
     "cpp": [
-        "system", "popen", "execl", "execv", "execve", "sprintf", "fprintf",
-        "snprintf", "strcpy", "strcat", "memcpy", "memmove", "free", "malloc",
-        "cout", "cerr",
+        "system",
+        "popen",
+        "execl",
+        "execv",
+        "execve",
+        "sprintf",
+        "fprintf",
+        "snprintf",
+        "strcpy",
+        "strcat",
+        "memcpy",
+        "memmove",
+        "free",
+        "malloc",
+        "cout",
+        "cerr",
     ],
     "java": [
-        "Runtime.exec", "ProcessBuilder.start", "executeQuery", "executeUpdate",
-        "sendRedirect", "forward", "include", "print", "write",
+        "Runtime.exec",
+        "ProcessBuilder.start",
+        "executeQuery",
+        "executeUpdate",
+        "sendRedirect",
+        "forward",
+        "include",
+        "print",
+        "write",
     ],
     "python": [
-        "eval", "exec", "os.system", "os.popen", "subprocess.call",
-        "subprocess.Popen", "subprocess.run", "pickle.load", "yaml.load",
+        "eval",
+        "exec",
+        "os.system",
+        "os.popen",
+        "subprocess.call",
+        "subprocess.Popen",
+        "subprocess.run",
+        "pickle.load",
+        "yaml.load",
         "sqlite3.execute",
     ],
     "javascript": [
-        "eval", "setTimeout", "setInterval", "child_process.exec",
-        "child_process.spawn", "fs.writeFile", "res.send", "res.render",
-        "document.write", "innerHTML",
+        "eval",
+        "setTimeout",
+        "setInterval",
+        "child_process.exec",
+        "child_process.spawn",
+        "fs.writeFile",
+        "res.send",
+        "res.render",
+        "document.write",
+        "innerHTML",
     ],
     "go": [
-        "os/exec.Command", "syscall.Exec", "net/http.ResponseWriter.Write",
-        "fmt.Printf", "fmt.Fprintf", "log.Fatal", "database/sql.DB.Query",
-        "os.Create", "io/ioutil.WriteFile",
+        "os/exec.Command",
+        "syscall.Exec",
+        "net/http.ResponseWriter.Write",
+        "fmt.Printf",
+        "fmt.Fprintf",
+        "log.Fatal",
+        "database/sql.DB.Query",
+        "os.Create",
+        "io/ioutil.WriteFile",
     ],
     "csharp": [
-        "System.Diagnostics.Process.Start", "System.Data.SqlClient.SqlCommand.ExecuteReader",
-        "System.Data.SqlClient.SqlCommand.ExecuteNonQuery", "Response.Write",
-        "System.IO.File.WriteAllText", "System.Console.WriteLine",
+        "System.Diagnostics.Process.Start",
+        "System.Data.SqlClient.SqlCommand.ExecuteReader",
+        "System.Data.SqlClient.SqlCommand.ExecuteNonQuery",
+        "Response.Write",
+        "System.IO.File.WriteAllText",
+        "System.Console.WriteLine",
     ],
     "php": [
-        "exec", "shell_exec", "system", "passthru", "popen", "proc_open",
-        "eval", "assert", "preg_replace", "echo", "print", "printf",
-        "file_put_contents", "fwrite", "header", "setcookie", "mysql_query",
+        "exec",
+        "shell_exec",
+        "system",
+        "passthru",
+        "popen",
+        "proc_open",
+        "eval",
+        "assert",
+        "preg_replace",
+        "echo",
+        "print",
+        "printf",
+        "file_put_contents",
+        "fwrite",
+        "header",
+        "setcookie",
+        "mysql_query",
     ],
     "ruby": [
-        "eval", "system", "exec", "syscall", "render", "send_file", "redirect_to",
-        "print", "puts", "File.write", "ActiveRecord::Base.connection.execute",
+        "eval",
+        "system",
+        "exec",
+        "syscall",
+        "render",
+        "send_file",
+        "redirect_to",
+        "print",
+        "puts",
+        "File.write",
+        "ActiveRecord::Base.connection.execute",
     ],
     "swift": [
-        "Process.launch", "Process()", "String(format:)", "print",
+        "Process.launch",
+        "Process()",
+        "String(format:)",
+        "print",
         "FileManager.default.createFile",
     ],
     "kotlin": [
-        "Runtime.exec", "ProcessBuilder.start", "print", "println",
-        "File.writeText", "rawQuery", "execSQL",
+        "Runtime.exec",
+        "ProcessBuilder.start",
+        "print",
+        "println",
+        "File.writeText",
+        "rawQuery",
+        "execSQL",
     ],
     "jimple": [
-        "Runtime.exec", "ProcessBuilder.start", "executeQuery", "executeUpdate",
-        "sendRedirect", "print", "write",
+        "Runtime.exec",
+        "ProcessBuilder.start",
+        "executeQuery",
+        "executeUpdate",
+        "sendRedirect",
+        "print",
+        "write",
     ],
     "ghidra": [
-        "system", "popen", "execl", "execv", "strcpy", "memcpy", "sprintf",
-        "WinExec", "ShellExecute", "CreateProcess", "system", "strcpy", "memcpy",
+        "system",
+        "popen",
+        "execl",
+        "execv",
+        "strcpy",
+        "memcpy",
+        "sprintf",
+        "WinExec",
+        "ShellExecute",
+        "CreateProcess",
+        "system",
+        "strcpy",
+        "memcpy",
     ],
 }
 
@@ -146,60 +421,113 @@ DEFAULT_SINKS = {
 # Flows through these functions are considered "cleaned" and filtered out
 DEFAULT_SANITIZERS = {
     "c": [
-        "strlcpy", "strlcat",
-        "snprintf", "vsnprintf",
-        "strtol", "strtoul", "strtoll", "strtoull", "strtod",
-        "atoi", "atol", "atof",
-        "xmlEncodeEntities", "xmlEncodeSpecialChars",
+        "strlcpy",
+        "strlcat",
+        "snprintf",
+        "vsnprintf",
+        "strtol",
+        "strtoul",
+        "strtoll",
+        "strtoull",
+        "strtod",
+        "atoi",
+        "atol",
+        "atof",
+        "xmlEncodeEntities",
+        "xmlEncodeSpecialChars",
         "htmlEncodeEntities",
     ],
     "cpp": [
-        "strlcpy", "strlcat", "snprintf", "vsnprintf",
-        "stoi", "stol", "stoul", "stod",
-        "atoi", "atol", "atof",
+        "strlcpy",
+        "strlcat",
+        "snprintf",
+        "vsnprintf",
+        "stoi",
+        "stol",
+        "stoul",
+        "stod",
+        "atoi",
+        "atol",
+        "atof",
     ],
     "java": [
-        "escapeHtml", "escapeXml", "escapeSql", "escapeJavaScript",
-        "encode", "parseInt", "parseLong", "parseDouble",
-        "setString", "setInt", "setLong",
-        "trim", "strip",
+        "escapeHtml",
+        "escapeXml",
+        "escapeSql",
+        "escapeJavaScript",
+        "encode",
+        "parseInt",
+        "parseLong",
+        "parseDouble",
+        "setString",
+        "setInt",
+        "setLong",
+        "trim",
+        "strip",
     ],
     "python": [
-        "escape", "quote", "clean",
-        "int", "float", "str",
+        "escape",
+        "quote",
+        "clean",
+        "int",
+        "float",
+        "str",
     ],
     "javascript": [
-        "encodeURIComponent", "encodeURI",
-        "escapeHtml", "sanitize",
-        "parseInt", "parseFloat", "Number",
+        "encodeURIComponent",
+        "encodeURI",
+        "escapeHtml",
+        "sanitize",
+        "parseInt",
+        "parseFloat",
+        "Number",
     ],
     "go": [
-        "EscapeString", "QueryEscape",
-        "Atoi", "ParseInt", "ParseFloat",
-        "Clean", "Base",
+        "EscapeString",
+        "QueryEscape",
+        "Atoi",
+        "ParseInt",
+        "ParseFloat",
+        "Clean",
+        "Base",
         "HTMLEscapeString",
     ],
     "php": [
-        "htmlspecialchars", "htmlentities", "strip_tags",
-        "addslashes", "mysqli_real_escape_string",
-        "intval", "floatval",
-        "filter_var", "filter_input",
-        "urlencode", "rawurlencode",
+        "htmlspecialchars",
+        "htmlentities",
+        "strip_tags",
+        "addslashes",
+        "mysqli_real_escape_string",
+        "intval",
+        "floatval",
+        "filter_var",
+        "filter_input",
+        "urlencode",
+        "rawurlencode",
     ],
     "ruby": [
-        "sanitize", "h", "html_escape",
-        "Integer", "Float",
+        "sanitize",
+        "h",
+        "html_escape",
+        "Integer",
+        "Float",
     ],
     "csharp": [
-        "HtmlEncode", "UrlEncode",
-        "Escape", "TryParse", "ToInt32",
+        "HtmlEncode",
+        "UrlEncode",
+        "Escape",
+        "TryParse",
+        "ToInt32",
     ],
     "swift": [
         "addingPercentEncoding",
     ],
     "kotlin": [
-        "escapeHtml", "encode",
-        "toInt", "toLong", "toDouble",
+        "escapeHtml",
+        "encode",
+        "toInt",
+        "toLong",
+        "toDouble",
     ],
 }
 
@@ -263,7 +591,9 @@ def _cached_taint_query(
     # Try cache first
     if db_manager:
         try:
-            cached = db_manager.get_cached_tool_output(tool_name, codebase_hash, cache_params)
+            cached = db_manager.get_cached_tool_output(
+                tool_name, codebase_hash, cache_params
+            )
             if cached is not None:
                 logger.debug(f"Cache hit for {tool_name}")
                 return cached
@@ -279,11 +609,15 @@ def _cached_taint_query(
             should_cache = False
             if isinstance(result, dict) and result.get("success", False):
                 should_cache = True
-            elif isinstance(result, str) and not result.startswith(("Error:", "Validation Error:", "Internal Error:")):
+            elif isinstance(result, str) and not result.startswith(
+                ("Error:", "Validation Error:", "Internal Error:")
+            ):
                 should_cache = True
 
             if should_cache:
-                db_manager.cache_tool_output(tool_name, codebase_hash, cache_params, result)
+                db_manager.cache_tool_output(
+                    tool_name, codebase_hash, cache_params, result
+                )
         except Exception:
             pass  # cache write failure is non-fatal
 
@@ -319,17 +653,23 @@ def _find_taint_flows_auto(
         if hasattr(cfg.cpg, "taint_sources")
         else {}
     )
-    src_patterns = source_patterns or taint_src_cfg.get(lang, []) or DEFAULT_SOURCES.get(lang.lower(), [])
+    src_patterns = (
+        source_patterns
+        or taint_src_cfg.get(lang, [])
+        or DEFAULT_SOURCES.get(lang.lower(), [])
+    )
     if not src_patterns:
         return f"No taint source patterns available for language '{lang}'. Supported: {', '.join(DEFAULT_SOURCES.keys())}"
 
     # Resolve sink patterns: user-provided -> config -> built-in defaults
     taint_snk_cfg = (
-        getattr(cfg.cpg, "taint_sinks", {})
-        if hasattr(cfg.cpg, "taint_sinks")
-        else {}
+        getattr(cfg.cpg, "taint_sinks", {}) if hasattr(cfg.cpg, "taint_sinks") else {}
     )
-    snk_patterns = sink_patterns or taint_snk_cfg.get(lang, []) or DEFAULT_SINKS.get(lang.lower(), [])
+    snk_patterns = (
+        sink_patterns
+        or taint_snk_cfg.get(lang, [])
+        or DEFAULT_SINKS.get(lang.lower(), [])
+    )
     if not snk_patterns:
         return f"No taint sink patterns available for language '{lang}'. Supported: {', '.join(DEFAULT_SINKS.keys())}"
 
@@ -339,7 +679,11 @@ def _find_taint_flows_auto(
         if hasattr(cfg.cpg, "taint_sanitizers")
         else {}
     )
-    san_patterns = sanitizer_patterns or taint_san_cfg.get(lang, []) or DEFAULT_SANITIZERS.get(lang.lower(), [])
+    san_patterns = (
+        sanitizer_patterns
+        or taint_san_cfg.get(lang, [])
+        or DEFAULT_SANITIZERS.get(lang.lower(), [])
+    )
 
     # Build Joern regex patterns
     source_regex = _build_joern_name_pattern(src_patterns)
@@ -382,12 +726,18 @@ def _find_taint_flows_auto(
         if isinstance(result.data, str):
             return result.data.strip()
         elif isinstance(result.data, list) and len(result.data) > 0:
-            output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+            output = (
+                result.data[0]
+                if isinstance(result.data[0], str)
+                else str(result.data[0])
+            )
             return output.strip()
         else:
             return f"Query returned unexpected format: {type(result.data)}"
 
-    return _cached_taint_query(services, "find_taint_flows_auto", codebase_hash, cache_params, _execute)
+    return _cached_taint_query(
+        services, "find_taint_flows_auto", codebase_hash, cache_params, _execute
+    )
 
 
 def register_taint_analysis_tools(mcp, services: dict):
@@ -425,11 +775,30 @@ Examples:
     find_taint_sources(codebase_hash="abc", source_patterns=["read_from_socket"])""",
     )
     def find_taint_sources(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        language: Annotated[Optional[str], Field(description="Programming language (c, cpp, java, python, javascript). If not provided, uses the CPG's language")] = None,
-        source_patterns: Annotated[Optional[list], Field(description="Optional list of patterns to match source function names. If not provided, uses built-in defaults")] = None,
-        filename: Annotated[Optional[str], Field(description="Optional filename to filter results (e.g., 'shell.c'). Uses regex matching")] = None,
-        limit: Annotated[int, Field(description="Maximum number of results to return")] = 200,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        language: Annotated[
+            Optional[str],
+            Field(
+                description="Programming language (c, cpp, java, python, javascript). If not provided, uses the CPG's language"
+            ),
+        ] = None,
+        source_patterns: Annotated[
+            Optional[list],
+            Field(
+                description="Optional list of patterns to match source function names. If not provided, uses built-in defaults"
+            ),
+        ] = None,
+        filename: Annotated[
+            Optional[str],
+            Field(
+                description="Optional filename to filter results (e.g., 'shell.c'). Uses regex matching"
+            ),
+        ] = None,
+        limit: Annotated[
+            int, Field(description="Maximum number of results to return")
+        ] = 200,
     ) -> Dict[str, Any]:
         """Find function calls that are entry points for external/untrusted data."""
         try:
@@ -441,11 +810,13 @@ Examples:
             # Verify CPG exists for this codebase
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             # Determine language and patterns
             lang = language or codebase_info.language or "c"
-            
+
             # Try config first, then fall back to built-in defaults
             cfg = services["config"]
             taint_cfg = (
@@ -455,15 +826,29 @@ Examples:
             )
 
             # Priority: 1) user-provided, 2) config, 3) built-in defaults
-            patterns = source_patterns or taint_cfg.get(lang, []) or DEFAULT_SOURCES.get(lang.lower(), [])
+            patterns = (
+                source_patterns
+                or taint_cfg.get(lang, [])
+                or DEFAULT_SOURCES.get(lang.lower(), [])
+            )
             if not patterns:
-                return {"success": True, "sources": [], "total": 0, "message": f"No taint sources configured for language {lang}. Supported: {', '.join(DEFAULT_SOURCES.keys())}"}
+                return {
+                    "success": True,
+                    "sources": [],
+                    "total": 0,
+                    "message": f"No taint sources configured for language {lang}. Supported: {', '.join(DEFAULT_SOURCES.keys())}",
+                }
 
             # Build Joern .name() regex from patterns, extracting short names
             # from qualified patterns (e.g., 'os.system' -> 'system')
             joined = _build_joern_name_pattern(patterns)
 
-            cache_params = {"lang": lang, "patterns": sorted(set(patterns)), "filename": filename, "limit": limit}
+            cache_params = {
+                "lang": lang,
+                "patterns": sorted(set(patterns)),
+                "filename": filename,
+                "limit": limit,
+            }
 
             def _execute():
                 # Build query with optional file filter
@@ -493,14 +878,16 @@ Examples:
                 sources = []
                 for item in result.data:
                     if isinstance(item, dict):
-                        sources.append({
-                            "node_id": item.get("_1"),
-                            "name": item.get("_2"),
-                            "code": item.get("_3"),
-                            "filename": item.get("_4"),
-                            "lineNumber": item.get("_5"),
-                            "method": item.get("_6"),
-                        })
+                        sources.append(
+                            {
+                                "node_id": item.get("_1"),
+                                "name": item.get("_2"),
+                                "code": item.get("_3"),
+                                "filename": item.get("_4"),
+                                "lineNumber": item.get("_5"),
+                                "method": item.get("_6"),
+                            }
+                        )
 
                 return {
                     "success": True,
@@ -510,7 +897,9 @@ Examples:
                     "has_more": len(sources) >= limit,
                 }
 
-            return _cached_taint_query(services, "find_taint_sources", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_taint_sources", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error finding taint sources: {e}")
@@ -557,11 +946,30 @@ Examples:
     find_taint_sinks(codebase_hash="abc", sink_patterns=["custom_exec"])""",
     )
     def find_taint_sinks(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        language: Annotated[Optional[str], Field(description="Programming language (c, cpp, java, python, javascript, etc). If not provided, uses the CPG's language")] = None,
-        sink_patterns: Annotated[Optional[list], Field(description="Optional list of regex patterns to match sink function names (e.g., ['system', 'popen', 'sprintf']). If not provided, uses default patterns")] = None,
-        filename: Annotated[Optional[str], Field(description="Optional filename to filter results (e.g., 'shell.c', 'main.c'). Uses regex matching, so partial names work (e.g., 'shell' matches 'shell.c')")] = None,
-        limit: Annotated[int, Field(description="Maximum number of results to return")] = 200,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        language: Annotated[
+            Optional[str],
+            Field(
+                description="Programming language (c, cpp, java, python, javascript, etc). If not provided, uses the CPG's language"
+            ),
+        ] = None,
+        sink_patterns: Annotated[
+            Optional[list],
+            Field(
+                description="Optional list of regex patterns to match sink function names (e.g., ['system', 'popen', 'sprintf']). If not provided, uses default patterns"
+            ),
+        ] = None,
+        filename: Annotated[
+            Optional[str],
+            Field(
+                description="Optional filename to filter results (e.g., 'shell.c', 'main.c'). Uses regex matching, so partial names work (e.g., 'shell' matches 'shell.c')"
+            ),
+        ] = None,
+        limit: Annotated[
+            int, Field(description="Maximum number of results to return")
+        ] = 200,
     ) -> Dict[str, Any]:
         """Find security-sensitive function calls where untrusted data could cause harm."""
         try:
@@ -573,10 +981,12 @@ Examples:
             # Verify CPG exists for this codebase
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             lang = language or codebase_info.language or "c"
-            
+
             # Try config first, then fall back to built-in defaults
             cfg = services["config"]
             taint_cfg = (
@@ -586,15 +996,29 @@ Examples:
             )
 
             # Priority: 1) user-provided, 2) config, 3) built-in defaults
-            patterns = sink_patterns or taint_cfg.get(lang, []) or DEFAULT_SINKS.get(lang.lower(), [])
+            patterns = (
+                sink_patterns
+                or taint_cfg.get(lang, [])
+                or DEFAULT_SINKS.get(lang.lower(), [])
+            )
             if not patterns:
-                return {"success": True, "sinks": [], "total": 0, "message": f"No taint sinks configured for language {lang}. Supported: {', '.join(DEFAULT_SINKS.keys())}"}
+                return {
+                    "success": True,
+                    "sinks": [],
+                    "total": 0,
+                    "message": f"No taint sinks configured for language {lang}. Supported: {', '.join(DEFAULT_SINKS.keys())}",
+                }
 
             # Build Joern .name() regex from patterns, extracting short names
             # from qualified patterns (e.g., 'os.system' -> 'system')
             joined = _build_joern_name_pattern(patterns)
 
-            cache_params = {"lang": lang, "patterns": sorted(set(patterns)), "filename": filename, "limit": limit}
+            cache_params = {
+                "lang": lang,
+                "patterns": sorted(set(patterns)),
+                "filename": filename,
+                "limit": limit,
+            }
 
             def _execute():
                 # Build query with optional file filter
@@ -618,14 +1042,16 @@ Examples:
                 sinks = []
                 for item in result.data:
                     if isinstance(item, dict):
-                        sinks.append({
-                            "node_id": item.get("_1"),
-                            "name": item.get("_2"),
-                            "code": item.get("_3"),
-                            "filename": item.get("_4"),
-                            "lineNumber": item.get("_5"),
-                            "method": item.get("_6"),
-                        })
+                        sinks.append(
+                            {
+                                "node_id": item.get("_1"),
+                                "name": item.get("_2"),
+                                "code": item.get("_3"),
+                                "filename": item.get("_4"),
+                                "lineNumber": item.get("_5"),
+                                "method": item.get("_6"),
+                            }
+                        )
 
                 return {
                     "success": True,
@@ -635,7 +1061,9 @@ Examples:
                     "has_more": len(sinks) >= limit,
                 }
 
-            return _cached_taint_query(services, "find_taint_sinks", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_taint_sinks", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error finding taint sinks: {e}")
@@ -706,31 +1134,91 @@ Examples:
     find_taint_flows(codebase_hash="...", source_node_id=12345, sink_node_id=67890)""",
     )
     def find_taint_flows(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        source_location: Annotated[Optional[str], Field(description="(Manual mode) Source at 'file:line' (e.g., 'parser.c:782')")] = None,
-        sink_location: Annotated[Optional[str], Field(description="(Manual mode) Sink at 'file:line' (e.g., 'parser.c:800')")] = None,
-        source_node_id: Annotated[Optional[int], Field(description="(Manual mode) Node ID from find_taint_sources output")] = None,
-        sink_node_id: Annotated[Optional[int], Field(description="(Manual mode) Node ID from find_taint_sinks output")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        source_location: Annotated[
+            Optional[str],
+            Field(
+                description="(Manual mode) Source at 'file:line' (e.g., 'parser.c:782')"
+            ),
+        ] = None,
+        sink_location: Annotated[
+            Optional[str],
+            Field(
+                description="(Manual mode) Sink at 'file:line' (e.g., 'parser.c:800')"
+            ),
+        ] = None,
+        source_node_id: Annotated[
+            Optional[int],
+            Field(description="(Manual mode) Node ID from find_taint_sources output"),
+        ] = None,
+        sink_node_id: Annotated[
+            Optional[int],
+            Field(description="(Manual mode) Node ID from find_taint_sinks output"),
+        ] = None,
         max_results: Annotated[int, Field(description="Maximum flows to return")] = 20,
-        timeout: Annotated[int, Field(description="Query timeout in seconds (default 120 for manual, 300 for auto)")] = 120,
-        mode: Annotated[Optional[str], Field(description="Set to 'auto' for batch analysis with all default sources/sinks. Omit for manual mode.")] = None,
-        language: Annotated[Optional[str], Field(description="(Auto mode) Programming language for default patterns. Auto-detected if omitted.")] = None,
-        source_patterns: Annotated[Optional[list], Field(description="(Auto mode) Override default source function names (e.g., ['getenv', 'read'])")] = None,
-        sink_patterns: Annotated[Optional[list], Field(description="(Auto mode) Override default sink function names (e.g., ['system', 'strcpy'])")] = None,
-        filename: Annotated[Optional[str], Field(description="(Auto mode) Regex to filter sources/sinks by filename")] = None,
-        sanitizer_patterns: Annotated[Optional[list], Field(description="(Auto mode) Override default sanitizer function names. Flows through sanitizers are filtered out.")] = None,
+        timeout: Annotated[
+            int,
+            Field(
+                description="Query timeout in seconds (default 120 for manual, 300 for auto)"
+            ),
+        ] = 120,
+        mode: Annotated[
+            Optional[str],
+            Field(
+                description="Set to 'auto' for batch analysis with all default sources/sinks. Omit for manual mode."
+            ),
+        ] = None,
+        language: Annotated[
+            Optional[str],
+            Field(
+                description="(Auto mode) Programming language for default patterns. Auto-detected if omitted."
+            ),
+        ] = None,
+        source_patterns: Annotated[
+            Optional[list],
+            Field(
+                description="(Auto mode) Override default source function names (e.g., ['getenv', 'read'])"
+            ),
+        ] = None,
+        sink_patterns: Annotated[
+            Optional[list],
+            Field(
+                description="(Auto mode) Override default sink function names (e.g., ['system', 'strcpy'])"
+            ),
+        ] = None,
+        filename: Annotated[
+            Optional[str],
+            Field(description="(Auto mode) Regex to filter sources/sinks by filename"),
+        ] = None,
+        sanitizer_patterns: Annotated[
+            Optional[list],
+            Field(
+                description="(Auto mode) Override default sanitizer function names. Flows through sanitizers are filtered out."
+            ),
+        ] = None,
         # Legacy/Deprecated arguments - included to provide helpful error messages
-        source_pattern: Annotated[Optional[str], Field(description="DEPRECATED: Do not use")] = None,
-        sink_pattern: Annotated[Optional[str], Field(description="DEPRECATED: Do not use")] = None,
-        depth: Annotated[Optional[int], Field(description="DEPRECATED: Do not use")] = None,
+        source_pattern: Annotated[
+            Optional[str], Field(description="DEPRECATED: Do not use")
+        ] = None,
+        sink_pattern: Annotated[
+            Optional[str], Field(description="DEPRECATED: Do not use")
+        ] = None,
+        depth: Annotated[
+            Optional[int], Field(description="DEPRECATED: Do not use")
+        ] = None,
     ) -> str:
         """Find data flow paths between source and sink using Joern's native taint analysis."""
         try:
             # Check for legacy arguments that LLMs might hallucinate
             legacy_args = []
-            if source_pattern: legacy_args.append("source_pattern")
-            if sink_pattern: legacy_args.append("sink_pattern")
-            if depth: legacy_args.append("depth")
+            if source_pattern:
+                legacy_args.append("source_pattern")
+            if sink_pattern:
+                legacy_args.append("sink_pattern")
+            if depth:
+                legacy_args.append("depth")
 
             if legacy_args:
                 raise ValidationError(
@@ -748,7 +1236,9 @@ Examples:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first."
+                )
 
             # --- AUTO MODE ---
             if mode == "auto":
@@ -763,7 +1253,9 @@ Examples:
                     sanitizer_patterns=sanitizer_patterns,
                     filename=filename,
                     max_results=max_results,
-                    timeout=timeout if timeout != 120 else 300,  # default to 300s for auto mode (large codebases need more time)
+                    timeout=timeout
+                    if timeout != 120
+                    else 300,  # default to 300s for auto mode (large codebases need more time)
                 )
 
             # --- MANUAL MODE ---
@@ -781,10 +1273,14 @@ Examples:
 
             # Parse what was provided for clearer error messages
             provided_args = []
-            if has_source_loc: provided_args.append(f"source_location='{source_location}'")
-            if has_source_id: provided_args.append(f"source_node_id={source_node_id}")
-            if has_sink_loc: provided_args.append(f"sink_location='{sink_location}'")
-            if has_sink_id: provided_args.append(f"sink_node_id={sink_node_id}")
+            if has_source_loc:
+                provided_args.append(f"source_location='{source_location}'")
+            if has_source_id:
+                provided_args.append(f"source_node_id={source_node_id}")
+            if has_sink_loc:
+                provided_args.append(f"sink_location='{sink_location}'")
+            if has_sink_id:
+                provided_args.append(f"sink_node_id={sink_node_id}")
             provided_str = ", ".join(provided_args) if provided_args else "None"
 
             # Must have source (either location or node_id)
@@ -842,26 +1338,34 @@ Examples:
             # Parse locations
             source_file, source_line = "", -1
             sink_file, sink_line = "", -1
-            
+
             if has_source_loc:
                 parts = source_location.split(":")
                 if len(parts) < 2:
-                    raise ValidationError(f"source_location must be 'file:line', got: {source_location}")
+                    raise ValidationError(
+                        f"source_location must be 'file:line', got: {source_location}"
+                    )
                 source_file = parts[0]
                 try:
                     source_line = int(parts[1])
                 except ValueError:
-                    raise ValidationError(f"Invalid line number in source_location: {source_location}")
-            
+                    raise ValidationError(
+                        f"Invalid line number in source_location: {source_location}"
+                    )
+
             if has_sink_loc:
                 parts = sink_location.split(":")
                 if len(parts) < 2:
-                    raise ValidationError(f"sink_location must be 'file:line', got: {sink_location}")
+                    raise ValidationError(
+                        f"sink_location must be 'file:line', got: {sink_location}"
+                    )
                 sink_file = parts[0]
                 try:
                     sink_line = int(parts[1])
                 except ValueError:
-                    raise ValidationError(f"Invalid line number in sink_location: {sink_location}")
+                    raise ValidationError(
+                        f"Invalid line number in sink_location: {sink_location}"
+                    )
 
             cache_params = {
                 "source_location": source_location,
@@ -896,12 +1400,18 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_taint_flows", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_taint_flows", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error finding taint flows: {e}")
@@ -941,12 +1451,28 @@ Examples:
     get_program_slice(codebase_hash="abc", location="module/file.c:100", direction="forward")""",
     )
     def get_program_slice(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        location: Annotated[str, Field(description="'filename:line' or 'filename:line:call_name'. Example: 'main.c:42' or 'main.c:42:memcpy'")],
-        direction: Annotated[str, Field(description="Slice direction: 'backward' or 'forward'")] = "backward",
-        max_depth: Annotated[int, Field(description="Maximum depth for recursive dependency tracking")] = 5,
-        include_control_flow: Annotated[bool, Field(description="Include control dependencies (if/while conditions)")] = True,
-        timeout: Annotated[int, Field(description="Maximum execution time in seconds")] = 60,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        location: Annotated[
+            str,
+            Field(
+                description="'filename:line' or 'filename:line:call_name'. Example: 'main.c:42' or 'main.c:42:memcpy'"
+            ),
+        ],
+        direction: Annotated[
+            str, Field(description="Slice direction: 'backward' or 'forward'")
+        ] = "backward",
+        max_depth: Annotated[
+            int, Field(description="Maximum depth for recursive dependency tracking")
+        ] = 5,
+        include_control_flow: Annotated[
+            bool,
+            Field(description="Include control dependencies (if/while conditions)"),
+        ] = True,
+        timeout: Annotated[
+            int, Field(description="Maximum execution time in seconds")
+        ] = 60,
     ) -> str:
         """Get program slice showing code affecting (backward) or affected by (forward) a specific call."""
         try:
@@ -962,12 +1488,16 @@ Examples:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             # Parse location
             parts = location.split(":")
             if len(parts) < 2:
-                raise ValidationError("location must be 'filename:line' or 'filename:line:callname'")
+                raise ValidationError(
+                    "location must be 'filename:line' or 'filename:line:callname'"
+                )
             filename = parts[0]
             try:
                 line_num = int(parts[1])
@@ -997,7 +1527,7 @@ Examples:
                     include_backward=str(include_backward).lower(),
                     include_forward=str(include_forward).lower(),
                     include_control_flow=str(include_control_flow).lower(),
-                    direction=direction
+                    direction=direction,
                 )
 
                 result = query_executor.execute_query(
@@ -1013,12 +1543,18 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "get_program_slice", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "get_program_slice", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error getting program slice: {e}")
@@ -1026,7 +1562,6 @@ Examples:
         except Exception as e:
             logger.error(f"Unexpected error getting program slice: {e}", exc_info=True)
             return f"Internal Error: {str(e)}"
-
 
     @mcp.tool(
         description="""Analyze data dependencies for a variable at a specific location.
@@ -1088,7 +1623,9 @@ Examples:
             # Verify CPG exists for this codebase
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {
                 "location": location,
@@ -1102,7 +1639,7 @@ Examples:
                     filename=filename,
                     line_num=line_num,
                     variable=variable,
-                    direction=direction
+                    direction=direction,
                 )
 
                 result = query_executor.execute_query(
@@ -1118,12 +1655,18 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "get_variable_flow", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "get_variable_flow", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error getting data dependencies: {e}")
@@ -1168,8 +1711,13 @@ Notes:
     - Use find_taint_flows for alternative dataflow analysis approach.""",
     )
     def find_use_after_free(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 300,
     ) -> str:
@@ -1183,7 +1731,9 @@ Notes:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {
                 "filename": filename,
@@ -1210,18 +1760,26 @@ Notes:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_use_after_free", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_use_after_free", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting use-after-free: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting use-after-free: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting use-after-free: {e}", exc_info=True
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1253,8 +1811,13 @@ Returns:
     - Flow type (same-ptr, alias, or [CROSS-FUNC])""",
     )
     def find_double_free(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 300,
     ) -> str:
@@ -1268,7 +1831,9 @@ Returns:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {
                 "filename": filename,
@@ -1295,12 +1860,18 @@ Returns:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_double_free", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_double_free", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting double-free: {e}")
@@ -1349,8 +1920,13 @@ Notes:
     - Use find_taint_flows to check if allocation arguments come from external input.""",
     )
     def find_null_pointer_deref(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 300,
     ) -> str:
@@ -1364,7 +1940,9 @@ Notes:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {
                 "filename": filename,
@@ -1391,18 +1969,31 @@ Notes:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_null_pointer_deref", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services,
+                "find_null_pointer_deref",
+                codebase_hash,
+                cache_params,
+                _execute,
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting null pointer dereference: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting null pointer dereference: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting null pointer dereference: {e}",
+                exc_info=True,
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1447,8 +2038,13 @@ Notes:
     - Use find_taint_flows to check if arithmetic operands come from external input.""",
     )
     def find_integer_overflow(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 300,
     ) -> str:
@@ -1462,7 +2058,9 @@ Notes:
             # Verify CPG exists
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {
                 "filename": filename,
@@ -1489,18 +2087,26 @@ Notes:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_integer_overflow", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_integer_overflow", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting integer overflow: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting integer overflow: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting integer overflow: {e}", exc_info=True
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1534,8 +2140,13 @@ Examples:
     find_format_string_vulns(codebase_hash="abc", filename="log.c")""",
     )
     def find_format_string_vulns(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 120,
     ) -> str:
@@ -1548,7 +2159,9 @@ Examples:
 
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {"filename": filename, "limit": limit}
 
@@ -1569,18 +2182,31 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_format_string_vulns", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services,
+                "find_format_string_vulns",
+                codebase_hash,
+                cache_params,
+                _execute,
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting format string vulnerabilities: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting format string vulnerabilities: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting format string vulnerabilities: {e}",
+                exc_info=True,
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1615,8 +2241,13 @@ Examples:
     find_heap_overflow(codebase_hash="abc", filename="buffer.c")""",
     )
     def find_heap_overflow(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 240,
     ) -> str:
@@ -1629,7 +2260,9 @@ Examples:
 
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {"filename": filename, "limit": limit}
 
@@ -1650,18 +2283,26 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_heap_overflow", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_heap_overflow", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting heap overflow: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting heap overflow: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting heap overflow: {e}", exc_info=True
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1695,8 +2336,13 @@ Examples:
     find_stack_overflow(codebase_hash="abc", filename="parser.c")""",
     )
     def find_stack_overflow(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 240,
     ) -> str:
@@ -1709,7 +2355,9 @@ Examples:
 
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {"filename": filename, "limit": limit}
 
@@ -1730,18 +2378,26 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_stack_overflow", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_stack_overflow", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting stack overflow: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting stack overflow: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting stack overflow: {e}", exc_info=True
+            )
             return f"Internal Error: {str(e)}"
 
     @mcp.tool(
@@ -1773,8 +2429,13 @@ Examples:
     find_toctou(codebase_hash="abc", filename="fs_utils.c")""",
     )
     def find_toctou(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 240,
     ) -> str:
@@ -1787,7 +2448,9 @@ Examples:
 
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {"filename": filename, "limit": limit}
 
@@ -1808,12 +2471,18 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_toctou", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services, "find_toctou", codebase_hash, cache_params, _execute
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting TOCTOU: {e}")
@@ -1854,8 +2523,13 @@ Examples:
     find_uninitialized_reads(codebase_hash="abc", filename="parser.c")""",
     )
     def find_uninitialized_reads(
-        codebase_hash: Annotated[str, Field(description="The codebase hash from generate_cpg")],
-        filename: Annotated[Optional[str], Field(description="Optional filename regex to filter results")] = None,
+        codebase_hash: Annotated[
+            str, Field(description="The codebase hash from generate_cpg")
+        ],
+        filename: Annotated[
+            Optional[str],
+            Field(description="Optional filename regex to filter results"),
+        ] = None,
         limit: Annotated[int, Field(description="Maximum results to return")] = 100,
         timeout: Annotated[int, Field(description="Query timeout in seconds")] = 240,
     ) -> str:
@@ -1868,7 +2542,9 @@ Examples:
 
             codebase_info = codebase_tracker.get_codebase(codebase_hash)
             if not codebase_info or not codebase_info.cpg_path:
-                raise ValidationError(f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg.")
+                raise ValidationError(
+                    f"CPG not found for codebase {codebase_hash}. Generate it first using generate_cpg."
+                )
 
             cache_params = {"filename": filename, "limit": limit}
 
@@ -1889,16 +2565,28 @@ Examples:
                 if isinstance(result.data, str):
                     return result.data.strip()
                 elif isinstance(result.data, list) and len(result.data) > 0:
-                    output = result.data[0] if isinstance(result.data[0], str) else str(result.data[0])
+                    output = (
+                        result.data[0]
+                        if isinstance(result.data[0], str)
+                        else str(result.data[0])
+                    )
                     return output.strip()
                 else:
                     return f"Query returned unexpected format: {type(result.data)}"
 
-            return _cached_taint_query(services, "find_uninitialized_reads", codebase_hash, cache_params, _execute)
+            return _cached_taint_query(
+                services,
+                "find_uninitialized_reads",
+                codebase_hash,
+                cache_params,
+                _execute,
+            )
 
         except ValidationError as e:
             logger.error(f"Error detecting uninitialized reads: {e}")
             return f"Validation Error: {str(e)}"
         except Exception as e:
-            logger.error(f"Unexpected error detecting uninitialized reads: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error detecting uninitialized reads: {e}", exc_info=True
+            )
             return f"Internal Error: {str(e)}"
