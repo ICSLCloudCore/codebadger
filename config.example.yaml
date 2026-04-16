@@ -482,8 +482,22 @@ cpg:
       - github.com/gin-gonic/gin.Context.ShouldBindTOML
       - github.com/gin-gonic/gin.Context.ShouldBindWith
       - github.com/gin-gonic/gin.Context.ShouldBindYAML
+      - github.com/gin-gonic/gin/binding.Binding.Bind
+      - github.com/gin-gonic/gin/binding.BindingBody.BindBody
+      - github.com/gin-gonic/gin/binding.BindingUri.BindUri
+      - github.com/gin-gonic/gin/binding.MapFormWithTag
+      - github.com/gin-gonic/gin/binding.Default
+      - github.com/gin-gonic/gin/binding.BindUnmarshaler.UnmarshalParam
+      - github.com/gin-gonic/gin/binding.StructValidator.ValidateStruct
+      - github.com/gin-gonic/gin.Params.Get
+      - github.com/gin-gonic/gin.Params.ByName
+      - github.com/gin-gonic/gin.BasicAuth
+      - github.com/gin-gonic/gin.BasicAuthForRealm
+      - github.com/gin-gonic/gin.BasicAuthForProxy
       # Echo 框架
       - github.com/labstack/echo/v4.Context.Param
+      - github.com/labstack/echo/v4.Context.ParamNames
+      - github.com/labstack/echo/v4.Context.ParamValues
       - github.com/labstack/echo/v4.Context.QueryParam
       - github.com/labstack/echo/v4.Context.QueryParams
       - github.com/labstack/echo/v4.Context.FormValue
@@ -493,36 +507,117 @@ cpg:
       - github.com/labstack/echo/v4.Context.Cookies
       - github.com/labstack/echo/v4.Context.Request
       - github.com/labstack/echo/v4.Context.Bind
-      - github.com/labstack/echo/v4.Context.BindValidate
-      - github.com/labstack/echo/v4.Context.BindBody
-      - github.com/labstack/echo/v4.Context.BindQueryParams
-      - github.com/labstack/echo/v4.Context.BindPathParams
       - github.com/labstack/echo/v4.Context.FormFile
       - github.com/labstack/echo/v4.Context.MultipartForm
       - github.com/labstack/echo/v4.Context.RealIP
-      - github.com/labstack/echo/v4.Context.UserAgent
       - github.com/labstack/echo/v4.Context.QueryString
+      - github.com/labstack/echo/v4.DefaultBinder.Bind
+      - github.com/labstack/echo/v4.DefaultBinder.BindBody
+      - github.com/labstack/echo/v4.DefaultBinder.BindHeaders
+      - github.com/labstack/echo/v4.DefaultBinder.BindQueryParams
+      - github.com/labstack/echo/v4.DefaultBinder.BindPathParams
+      - github.com/labstack/echo/v4/websocket.Conn.ReadMessage
+      - github.com/labstack/echo/v4/websocket.Conn.ReadJSON
+      - github.com/labstack/echo/v4/websocket.Conn.ReadInto
+      - github.com/labstack/echo/v4.QueryParam
+      - github.com/labstack/echo/v4.FormParam
+      - github.com/labstack/echo/v4.PathParam
+      - github.com/labstack/echo/v4.Validator.Validate
       # Beego 框架
-      - github.com/astaxie/beego/context.Input
-      - github.com/astaxie/beego/context.Param
-      - github.com/astaxie/beego/context.GetCookie
-      - github.com/astaxie/beego/context.Input.Query
-      - github.com/astaxie/beego/context.Input.GetQuery
-      - github.com/astaxie/beego/context.Input.Post
-      - github.com/astaxie/beego/context.Input.Form
-      - github.com/astaxie/beego/context.Input.Get
-      - github.com/astaxie/beego/context.Input.Cookie
-      - github.com/astaxie/beego/context.Input.Header
-      - github.com/astaxie/beego/context.Input.Body
-      - github.com/astaxie/beego/context.Input.ParseForm
-      - github.com/astaxie/beego/context.Input.ParseMultipartForm
-      - github.com/astaxie/beego/context.Input.UserAgent
-      - github.com/astaxie/beego/context.Input.IP
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Bind
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.CopyBody
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Domain
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Host
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.IsUpload
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Method
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Param
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Params
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.ParseFormOrMultiForm
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Port
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Protocol
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Proxy
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Query
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Refer
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Referer
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Scheme
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Session
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Site
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.SubDomains
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.URI
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.URL
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.UserAgent
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.IP
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Cookie
+      - github.com/beego/beego/v2/server/web/context.BeegoInput.Header
+      - github.com/beego/beego/v2/server/web/context.Context.Bind
+      - github.com/beego/beego/v2/server/web/context.Context.BindForm
+      - github.com/beego/beego/v2/server/web/context.Context.BindJSON
+      - github.com/beego/beego/v2/server/web/context.Context.BindProtobuf
+      - github.com/beego/beego/v2/server/web/context.Context.BindXML
+      - github.com/beego/beego/v2/server/web/context.Context.BindYAML
+      - github.com/beego/beego/v2/server/web/context.Context.GetCookie
+      - github.com/beego/beego/v2/server/web/context.Context.GetSecureCookie
+      - github.com/beego/beego/v2/server/web/context.Context.Session
       - github.com/astaxie/beego/controller.Controller.GetString
+      - github.com/astaxie/beego/controller.Controller.GetStrings
       - github.com/astaxie/beego/controller.Controller.GetInt
+      - github.com/astaxie/beego/controller.Controller.GetInt8
+      - github.com/astaxie/beego/controller.Controller.GetInt16
+      - github.com/astaxie/beego/controller.Controller.GetInt32
+      - github.com/astaxie/beego/controller.Controller.GetInt64
       - github.com/astaxie/beego/controller.Controller.GetBool
+      - github.com/astaxie/beego/controller.Controller.GetFloat
       - github.com/astaxie/beego/controller.Controller.GetFloat64
+      - github.com/astaxie/beego/controller.Controller.GetUint
+      - github.com/astaxie/beego/controller.Controller.GetUint8
+      - github.com/astaxie/beego/controller.Controller.GetUint16
+      - github.com/astaxie/beego/controller.Controller.GetUint32
+      - github.com/astaxie/beego/controller.Controller.GetUint64
       - github.com/astaxie/beego/controller.Controller.GetFile
+      - github.com/astaxie/beego/controller.Controller.GetFiles
+      - github.com/astaxie/beego/controller.Controller.Bind
+      - github.com/astaxie/beego/controller.Controller.BindForm
+      - github.com/astaxie/beego/controller.Controller.BindJSON
+      - github.com/astaxie/beego/controller.Controller.BindXML
+      - github.com/astaxie/beego/controller.Controller.BindYAML
+      - github.com/astaxie/beego/controller.Controller.GetSecureCookie
+      - github.com/astaxie/beego/controller.Controller.GetSession
+      - github.com/astaxie/beego/controller.Controller.Input
+      - github.com/astaxie/beego/controller.Controller.ParseForm
+      - github.com/beego/beego/v2/server/web.Controller.GetString
+      - github.com/beego/beego/v2/server/web.Controller.GetStrings
+      - github.com/beego/beego/v2/server/web.Controller.GetInt
+      - github.com/beego/beego/v2/server/web.Controller.GetInt8
+      - github.com/beego/beego/v2/server/web.Controller.GetInt16
+      - github.com/beego/beego/v2/server/web.Controller.GetInt32
+      - github.com/beego/beego/v2/server/web.Controller.GetInt64
+      - github.com/beego/beego/v2/server/web.Controller.GetBool
+      - github.com/beego/beego/v2/server/web.Controller.GetFloat
+      - github.com/beego/beego/v2/server/web.Controller.GetFloat64
+      - github.com/beego/beego/v2/server/web.Controller.GetUint
+      - github.com/beego/beego/v2/server/web.Controller.GetUint8
+      - github.com/beego/beego/v2/server/web.Controller.GetUint16
+      - github.com/beego/beego/v2/server/web.Controller.GetUint32
+      - github.com/beego/beego/v2/server/web.Controller.GetUint64
+      - github.com/beego/beego/v2/server/web.Controller.GetFile
+      - github.com/beego/beego/v2/server/web.Controller.GetFiles
+      - github.com/beego/beego/v2/server/web.Controller.Bind
+      - github.com/beego/beego/v2/server/web.Controller.BindForm
+      - github.com/beego/beego/v2/server/web.Controller.BindJSON
+      - github.com/beego/beego/v2/server/web.Controller.BindProtobuf
+      - github.com/beego/beego/v2/server/web.Controller.BindXML
+      - github.com/beego/beego/v2/server/web.Controller.BindYAML
+      - github.com/beego/beego/v2/server/web.Controller.GetSecureCookie
+      - github.com/beego/beego/v2/server/web.Controller.GetSession
+      - github.com/beego/beego/v2/server/web.Controller.Input
+      - github.com/beego/beego/v2/server/web.Controller.ParseForm
+      - github.com/beego/beego/v2/server/grpc.Context.GetHeader
+      - github.com/beego/beego/v2/server/grpc.Context.Bind
+      - github.com/beego/beego/v2/server/grpc.Context.Metadata
+      - github.com/beego/beego/v2/server/grpc.Context.GetMetadata
+      - github.com/beego/beego/v2/server/grpc.Context.GetRequest
+      - github.com/beego/beego/v2/server/grpc.Context.GetRawData
+      - google.golang.org/grpc/metadata.FromIncomingContext
       # Fiber 框架
       - github.com/gofiber/fiber/v2.Ctx.Params
       - github.com/gofiber/fiber/v2.Ctx.Query
