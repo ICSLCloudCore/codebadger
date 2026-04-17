@@ -285,7 +285,7 @@ async def _generate_cpg_async(
         # Build command
         cmd = [
             cmd_binary,
-            f"/playground/codebases/{codebase_hash}",
+            f"/app/playground/codebases/{codebase_hash}",
             "-o",
             container_cpg_path,
         ]
@@ -365,7 +365,7 @@ async def _generate_cpg_async(
                         metadata={
                             "status": "failed",
                             "error": error_msg,
-                            "container_codebase_path": f"/playground/codebases/{codebase_hash}",
+                            "container_codebase_path": f"/app/playground/codebases/{codebase_hash}",
                             "container_cpg_path": container_cpg_path,
                         },
                     )
@@ -383,7 +383,7 @@ async def _generate_cpg_async(
             joern_port=joern_port,
             metadata={
                 "status": "ready",
-                "container_codebase_path": f"/playground/codebases/{codebase_hash}",
+                "container_codebase_path": f"/app/playground/codebases/{codebase_hash}",
                 "container_cpg_path": container_cpg_path,
             },
         )
@@ -627,7 +627,7 @@ Examples:
                         "container_cpg_path"
                     )
                     if not container_cpg_path:
-                        container_cpg_path = f"/playground/cpgs/{codebase_hash}/cpg.bin"
+                        container_cpg_path = f"/app/playground/cpgs/{codebase_hash}/cpg.bin"
 
                     # Mark as loading in DB
                     codebase_tracker.update_codebase(
@@ -686,7 +686,7 @@ Examples:
 
             # Step 1 & 2: Prepare source code - copy local path or clone repo
             codebase_dir = os.path.join(playground_path, "codebases", codebase_hash)
-            container_codebase_path = f"/playground/codebases/{codebase_hash}"
+            container_codebase_path = f"/app/playground/codebases/{codebase_hash}"
 
             logger.info(f"Preparing source code for {codebase_hash}")
 
@@ -734,7 +734,7 @@ Examples:
             # Step 3: Create CPG directory
             cpg_dir = os.path.join(playground_path, "cpgs", codebase_hash)
             cpg_path = os.path.join(cpg_dir, "cpg.bin")
-            container_cpg_path = f"/playground/cpgs/{codebase_hash}/cpg.bin"
+            container_cpg_path = f"/app/playground/cpgs/{codebase_hash}/cpg.bin"
             os.makedirs(cpg_dir, exist_ok=True)
             logger.info(f"CPG directory ready: {cpg_dir}")
 
@@ -875,7 +875,7 @@ Examples:
                         )
                         if not container_cpg_path:
                             container_cpg_path = (
-                                f"/playground/cpgs/{codebase_hash}/cpg.bin"
+                                f"/app/playground/cpgs/{codebase_hash}/cpg.bin"
                             )
 
                         codebase_tracker.update_codebase(

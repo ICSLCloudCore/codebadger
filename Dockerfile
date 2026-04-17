@@ -45,9 +45,6 @@ RUN mkdir -p ${JOERN_HOME} && \
 # Add Joern CLI tools to PATH
 ENV PATH="${JOERN_HOME}/joern-cli:${JOERN_HOME}/joern-cli/bin:${PATH}"
 
-# Create playground directory for CPG storage
-RUN mkdir -p /playground
-
 # Verify Joern installation
 RUN joern --help
 
@@ -66,7 +63,7 @@ COPY src/ ./src/
 
 # 设置环境变量
 ENV MCP_HOST=0.0.0.0
-ENV WORKSPACE_ROOT=/playground
+ENV WORKSPACE_ROOT=/app/playground
 ENV PYTHONUNBUFFERED=1
 
 # 暴露端口
