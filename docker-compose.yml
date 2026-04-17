@@ -18,6 +18,8 @@ services:
       - ./config.yaml:/app/config.yaml
       # 挂载需要分析的代码目录，可根据实际需求修改
       - /data/code/:/data/code
+      # 挂载宿主机code目录到当前目录
+      - /opt/storage/tmp/:/tmp/
     environment:
       # Optional: Override default config via environment variables
       - MCP_PORT=4242

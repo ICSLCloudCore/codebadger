@@ -126,8 +126,6 @@ dmypy.json
 /tmp/joern_*
 *.cpg
 *.bin
-config.yml
-config.yaml
 .cache/
 build.log
 
